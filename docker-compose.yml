@@ -10,6 +10,7 @@ services:
     environment:
       XDEBUG_MODE: ${XDEBUG_MODE:-off}
       PHP_IDE_CONFIG: serverName=my-coins
+      PLAYWRIGHT_TEST: ${PLAYWRIGHT_TEST:-0}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

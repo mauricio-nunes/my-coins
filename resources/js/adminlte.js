@@ -15,8 +15,10 @@ import { OverlayScrollbars } from 'overlayscrollbars'
 // Layout, accessibility). The data-lte-* API is wired on DOMContentLoaded.
 import 'admin-lte'
 import ApexCharts from 'apexcharts'
+import TomSelect from 'tom-select'
 
 window.ApexCharts = ApexCharts
+window.TomSelect = TomSelect
 
 /**
  * Initialise an optional plugin only when its global is present.

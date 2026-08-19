@@ -7,6 +7,7 @@ use App\Http\Controllers\Finance\CategoryController;
 use App\Http\Controllers\Finance\DashboardController;
 use App\Http\Controllers\Finance\ReportController;
 use App\Http\Controllers\Finance\ResetDemoController;
+use App\Http\Controllers\Finance\TagController;
 use App\Http\Controllers\Finance\TransactionController;
 use Illuminate\Support\Facades\Route;
 
@@ -20,6 +21,7 @@ Route::middleware('demo.auth')->group(function (): void {
     Route::resource('transactions', TransactionController::class);
     Route::resource('accounts', AccountController::class);
     Route::resource('categories', CategoryController::class)->except('show');
+    Route::resource('tags', TagController::class)->only(['index', 'store', 'edit', 'update', 'destroy']);
     Route::resource('budgets', BudgetController::class)->except('show');
     Route::get('/reports', ReportController::class)->name('reports.index');
     Route::post('/demo/reset', ResetDemoController::class)->name('demo.reset');

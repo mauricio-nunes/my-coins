@@ -13,7 +13,7 @@ class FinanceFlowTest extends TestCase
 
     public function test_core_pages_render_in_portuguese(): void
     {
-        foreach (['/dashboard', '/transactions', '/accounts', '/categories', '/budgets', '/reports'] as $path) {
+        foreach (['/dashboard', '/transactions', '/accounts', '/categories', '/tags', '/budgets', '/reports'] as $path) {
             $this->authenticated()->get($path)->assertOk();
         }
     }

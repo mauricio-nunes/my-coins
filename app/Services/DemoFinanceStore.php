@@ -71,17 +71,92 @@ class DemoFinanceStore
     {
         $transactions = collect($this->all('transactions'));
 
+        $tags = collect($this->all('tags'))->keyBy('id');
+
         return $transactions
-            ->when($filters['search'] ?? null, fn (Collection $items, string $search) => $items->filter(
-                fn (array $item): bool => str_contains(mb_strtolower($item['description']), mb_strtolower($search)),
-            ))
+            ->when($filters['search'] ?? null, function (Collection $items, string $search) use ($tags): Collection {
+                $needle = mb_strtolower($search);
+
+                return $items->filter(function (array $item) use ($needle, $tags): bool {
+                    $tagNames = collect($item['tag_ids'] ?? [])->map(
+                        fn (int $id): string => mb_strtolower($tags->get($id)['name'] ?? ''),
+                    );
+
+                    return str_contains(mb_strtolower($item['description']), $needle)
+                        || $tagNames->contains(fn (string $name): bool => str_contains($name, $needle));
+                });
+            })
             ->when($filters['type'] ?? null, fn (Collection $items, string $type) => $items->where('type', $type))
             ->when($filters['account_id'] ?? null, fn (Collection $items, mixed $id) => $items->where('account_id', (int) $id))
             ->when($filters['category_id'] ?? null, fn (Collection $items, mixed $id) => $items->where('category_id', (int) $id))
             ->when($filters['from'] ?? null, fn (Collection $items, string $date) => $items->where('date', '>=', $date))
             ->when($filters['to'] ?? null, fn (Collection $items, string $date) => $items->where('date', '<=', $date))
+            ->when($filters['tag_ids'] ?? null, function (Collection $items, array $tagIds): Collection {
+                $required = array_values(array_unique(array_map('intval', $tagIds)));
+
+                return $items->filter(fn (array $item): bool => array_diff($required, $item['tag_ids'] ?? []) === []);
+            })
             ->sortByDesc(fn (array $item) => $item['date'].'-'.$item['id'])
             ->values();
+    }
+
+    public function findTagByName(string $name): ?array
+    {
+        $normalized = $this->normalizeTagName($name);
+
+        return collect($this->all('tags'))->firstWhere('normalized_name', $normalized);
+    }
+
+    public function resolveTagIds(array $names): array
+    {
+        $ids = [];
+        foreach ($names as $name) {
+            $displayName = $this->cleanTagName((string) $name);
+            $tag = $this->findTagByName($displayName)
+                ?? $this->create('tags', ['name' => $displayName, 'normalized_name' => $this->normalizeTagName($displayName)]);
+            $ids[] = $tag['id'];
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    public function tagUsage(int $id): int
+    {
+        return collect($this->all('transactions'))->filter(
+            fn (array $transaction): bool => in_array($id, $transaction['tag_ids'] ?? [], true),
+        )->count();
+    }
+
+    public function renameTag(int $id, string $name): ?array
+    {
+        $displayName = $this->cleanTagName($name);
+
+        return $this->update('tags', $id, [
+            'name' => $displayName,
+            'normalized_name' => $this->normalizeTagName($displayName),
+        ]);
+    }
+
+    public function deleteTag(int $id): bool
+    {
+        $data = $this->data();
+        $before = count($data['tags']);
+        $data['tags'] = array_values(array_filter($data['tags'], fn (array $tag): bool => $tag['id'] !== $id));
+
+        if (count($data['tags']) === $before) {
+            return false;
+        }
+
+        foreach ($data['transactions'] as &$transaction) {
+            $transaction['tag_ids'] = array_values(array_filter(
+                $transaction['tag_ids'] ?? [],
+                fn (int $tagId): bool => $tagId !== $id,
+            ));
+        }
+        unset($transaction);
+        $this->save($data);
+
+        return true;
     }
 
     public function balance(int $accountId): int
@@ -155,12 +230,41 @@ class DemoFinanceStore
             $this->reset();
         }
 
-        return $this->session->get(self::KEY);
+        $data = $this->session->get(self::KEY);
+        $changed = false;
+
+        if (! array_key_exists('tags', $data)) {
+            $data['tags'] = [];
+            $changed = true;
+        }
+
+        foreach ($data['transactions'] ?? [] as $index => $transaction) {
+            if (! array_key_exists('tag_ids', $transaction)) {
+                $data['transactions'][$index]['tag_ids'] = [];
+                $changed = true;
+            }
+        }
+
+        if ($changed) {
+            $this->save($data);
+        }
+
+        return $data;
     }
 
     private function save(array $data): void
     {
         $this->session->put(self::KEY, $data);
+    }
+
+    private function cleanTagName(string $name): string
+    {
+        return preg_replace('/\s+/u', ' ', trim($name)) ?? trim($name);
+    }
+
+    private function normalizeTagName(string $name): string
+    {
+        return mb_strtolower($this->cleanTagName($name));
     }
 
     private function fixtures(): array
@@ -185,16 +289,21 @@ class DemoFinanceStore
                 ['id' => 6, 'name' => 'Lazer', 'type' => 'expense', 'icon' => 'bi-controller', 'color' => '#db2777'],
                 ['id' => 7, 'name' => 'Saúde', 'type' => 'expense', 'icon' => 'bi-heart-pulse', 'color' => '#dc2626'],
             ],
+            'tags' => [
+                ['id' => 1, 'name' => 'Essencial', 'normalized_name' => 'essencial'],
+                ['id' => 2, 'name' => 'Trabalho', 'normalized_name' => 'trabalho'],
+                ['id' => 3, 'name' => 'Fim de semana', 'normalized_name' => 'fim de semana'],
+            ],
             'transactions' => [
-                ['id' => 1, 'description' => 'Salário mensal', 'type' => 'income', 'amount' => 780000, 'date' => $date(12), 'account_id' => 1, 'category_id' => 1, 'notes' => 'Crédito em conta'],
-                ['id' => 2, 'description' => 'Aluguel', 'type' => 'expense', 'amount' => 235000, 'date' => $date(10), 'account_id' => 1, 'category_id' => 3, 'notes' => 'Apartamento'],
-                ['id' => 3, 'description' => 'Supermercado Vila', 'type' => 'expense', 'amount' => 48670, 'date' => $date(7), 'account_id' => 1, 'category_id' => 4, 'notes' => 'Compra semanal'],
-                ['id' => 4, 'description' => 'Projeto freelance', 'type' => 'income', 'amount' => 160000, 'date' => $date(6), 'account_id' => 2, 'category_id' => 2, 'notes' => 'Landing page'],
-                ['id' => 5, 'description' => 'Combustível', 'type' => 'expense', 'amount' => 21000, 'date' => $date(4), 'account_id' => 1, 'category_id' => 5, 'notes' => 'Posto Central'],
-                ['id' => 6, 'description' => 'Cinema', 'type' => 'expense', 'amount' => 9200, 'date' => $date(2), 'account_id' => 3, 'category_id' => 6, 'notes' => 'Ingressos e lanche'],
-                ['id' => 7, 'description' => 'Farmácia', 'type' => 'expense', 'amount' => 13780, 'date' => $date(1), 'account_id' => 1, 'category_id' => 7, 'notes' => 'Medicamentos'],
-                ['id' => 8, 'description' => 'Salário mensal', 'type' => 'income', 'amount' => 780000, 'date' => $today->subMonth()->day(5)->format('Y-m-d'), 'account_id' => 1, 'category_id' => 1, 'notes' => 'Crédito em conta'],
-                ['id' => 9, 'description' => 'Aluguel', 'type' => 'expense', 'amount' => 235000, 'date' => $today->subMonth()->day(7)->format('Y-m-d'), 'account_id' => 1, 'category_id' => 3, 'notes' => 'Apartamento'],
+                ['id' => 1, 'description' => 'Salário mensal', 'type' => 'income', 'amount' => 780000, 'date' => $date(12), 'account_id' => 1, 'category_id' => 1, 'notes' => 'Crédito em conta', 'tag_ids' => [1]],
+                ['id' => 2, 'description' => 'Aluguel', 'type' => 'expense', 'amount' => 235000, 'date' => $date(10), 'account_id' => 1, 'category_id' => 3, 'notes' => 'Apartamento', 'tag_ids' => [1]],
+                ['id' => 3, 'description' => 'Supermercado Vila', 'type' => 'expense', 'amount' => 48670, 'date' => $date(7), 'account_id' => 1, 'category_id' => 4, 'notes' => 'Compra semanal', 'tag_ids' => [1]],
+                ['id' => 4, 'description' => 'Projeto freelance', 'type' => 'income', 'amount' => 160000, 'date' => $date(6), 'account_id' => 2, 'category_id' => 2, 'notes' => 'Landing page', 'tag_ids' => [2]],
+                ['id' => 5, 'description' => 'Combustível', 'type' => 'expense', 'amount' => 21000, 'date' => $date(4), 'account_id' => 1, 'category_id' => 5, 'notes' => 'Posto Central', 'tag_ids' => []],
+                ['id' => 6, 'description' => 'Cinema', 'type' => 'expense', 'amount' => 9200, 'date' => $date(2), 'account_id' => 3, 'category_id' => 6, 'notes' => 'Ingressos e lanche', 'tag_ids' => [3]],
+                ['id' => 7, 'description' => 'Farmácia', 'type' => 'expense', 'amount' => 13780, 'date' => $date(1), 'account_id' => 1, 'category_id' => 7, 'notes' => 'Medicamentos', 'tag_ids' => [1]],
+                ['id' => 8, 'description' => 'Salário mensal', 'type' => 'income', 'amount' => 780000, 'date' => $today->subMonth()->day(5)->format('Y-m-d'), 'account_id' => 1, 'category_id' => 1, 'notes' => 'Crédito em conta', 'tag_ids' => [1]],
+                ['id' => 9, 'description' => 'Aluguel', 'type' => 'expense', 'amount' => 235000, 'date' => $today->subMonth()->day(7)->format('Y-m-d'), 'account_id' => 1, 'category_id' => 3, 'notes' => 'Apartamento', 'tag_ids' => [1]],
             ],
             'budgets' => [
                 ['id' => 1, 'category_id' => 3, 'month' => $month, 'limit' => 250000],

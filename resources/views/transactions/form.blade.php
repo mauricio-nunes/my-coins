@@ -1,5 +1,22 @@
 @extends('layouts.app')
-@php($editing = (bool) $transaction)
+@php
+    $editing = (bool) $transaction;
+    $selectedTags = old('tags', collect($transaction['tag_ids'] ?? [])
+        ->map(function ($id) use ($tags) {
+            return $tags->firstWhere('id', $id)['name'] ?? null;
+        })
+        ->filter()
+        ->values()
+        ->all());
+    $tagSelectConfig = json_encode([
+        'create' => true,
+        'persist' => false,
+        'maxItems' => 10,
+        'plugins' => ['remove_button'],
+        'placeholder' => 'Selecione ou digite para criar...',
+        'items' => $selectedTags,
+    ]);
+@endphp
 @section('title', $editing ? 'Editar transação' : 'Nova transação')
 @section('eyebrow', 'TRANSAÇÕES')
 @section('page_title', $editing ? 'Editar transação' : 'Nova transação')
@@ -17,6 +34,7 @@
         <div class="col-md-6"><label for="date" class="form-label">Data</label><input id="date" type="date" name="date" value="{{ old('date', $transaction['date'] ?? now()->format('Y-m-d')) }}" class="form-control @error('date') is-invalid @enderror" required><x-field-error name="date" /></div>
         <div class="col-md-6"><label for="account_id" class="form-label">Conta</label><select id="account_id" name="account_id" class="form-select @error('account_id') is-invalid @enderror" required><option value="">Selecione</option>@foreach($accounts as $account)<option value="{{ $account['id'] }}" @selected(old('account_id', $transaction['account_id'] ?? '') == $account['id'])>{{ $account['name'] }} · {{ $account['institution'] }}</option>@endforeach</select><x-field-error name="account_id" /></div>
         <div class="col-12"><label for="category_id" class="form-label">Categoria</label><select id="category_id" name="category_id" class="form-select @error('category_id') is-invalid @enderror" required><option value="">Selecione</option>@foreach($categories->groupBy('type') as $type => $items)<optgroup label="{{ $type === 'income' ? 'Receitas' : 'Despesas' }}">@foreach($items as $category)<option value="{{ $category['id'] }}" data-type="{{ $category['type'] }}" @selected(old('category_id', $transaction['category_id'] ?? '') == $category['id'])>{{ $category['name'] }}</option>@endforeach</optgroup>@endforeach</select><x-field-error name="category_id" /></div>
+        <div class="col-12"><label for="tags" class="form-label">Tags <span class="text-body-secondary fw-normal">(opcional)</span></label><select id="tags" name="tags[]" multiple aria-label="Tags da transação" class="form-select @error('tags') is-invalid @enderror @error('tags.*') is-invalid @enderror" data-tom-select data-tom-select-config="{{ $tagSelectConfig }}"><option value=""></option>@foreach($tags as $tag)<option value="{{ $tag['name'] }}" @selected(in_array($tag['name'], $selectedTags, true))>{{ $tag['name'] }}</option>@endforeach @foreach($selectedTags as $selectedTag) @if(!$tags->contains('name', $selectedTag))<option value="{{ $selectedTag }}" selected>{{ $selectedTag }}</option>@endif @endforeach</select><div class="form-text">Use até 10 tags. Digite um nome e pressione Enter para criar.</div><x-field-error name="tags" />@error('tags.*')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror</div>
         <div class="col-12"><label for="notes" class="form-label">Observações <span class="text-body-secondary fw-normal">(opcional)</span></label><textarea id="notes" name="notes" rows="3" maxlength="500" class="form-control @error('notes') is-invalid @enderror">{{ old('notes', $transaction['notes'] ?? '') }}</textarea><x-field-error name="notes" /></div>
     </div>
     <div class="d-flex justify-content-end gap-2 mt-4"><a href="{{ route('transactions.index') }}" class="btn btn-light">Cancelar</a><button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1"></i>{{ $editing ? 'Salvar alterações' : 'Adicionar transação' }}</button></div>

@@ -64,6 +64,7 @@ return [
         ['text' => 'Transações', 'route' => 'transactions.index', 'active' => ['transactions*'], 'icon' => 'bi bi-arrow-left-right'],
         ['text' => 'Contas', 'route' => 'accounts.index', 'active' => ['accounts*'], 'icon' => 'bi bi-wallet2'],
         ['text' => 'Categorias', 'route' => 'categories.index', 'active' => ['categories*'], 'icon' => 'bi bi-tags'],
+        ['text' => 'Tags', 'route' => 'tags.index', 'active' => ['tags*'], 'icon' => 'bi bi-hash'],
         ['text' => 'Orçamentos', 'route' => 'budgets.index', 'active' => ['budgets*'], 'icon' => 'bi bi-bullseye'],
         ['header' => 'ANÁLISE'],
         ['text' => 'Relatórios', 'route' => 'reports.index', 'active' => ['reports*'], 'icon' => 'bi bi-bar-chart-line'],

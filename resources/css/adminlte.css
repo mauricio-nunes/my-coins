@@ -9,6 +9,7 @@
 @import 'bootstrap-icons/font/bootstrap-icons.css';
 @import 'overlayscrollbars/overlayscrollbars.css';
 @import 'admin-lte/dist/css/adminlte.css';
+@import 'tom-select/dist/css/tom-select.bootstrap5.css';
 
 :root {
   --mc-primary: #0f766e;

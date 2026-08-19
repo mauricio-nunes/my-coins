@@ -38,7 +38,7 @@ format:
 
 e2e:
 	$(COMPOSE) rm -sf app
-	$(COMPOSE) up -d app
+	PLAYWRIGHT_TEST=1 $(COMPOSE) up -d app
 	$(COMPOSE) run --rm browser npm run test:e2e
 
 debug: clean-containers

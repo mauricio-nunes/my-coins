@@ -15,8 +15,17 @@ class TransactionController extends Controller
 {
     public function index(Request $request, DemoFinanceStore $store): View
     {
-        $filters = $request->only(['search', 'type', 'account_id', 'category_id', 'from', 'to']);
-        $items = $store->transactions($filters);
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:120'],
+            'type' => ['nullable', 'in:income,expense'],
+            'account_id' => ['nullable', 'integer'],
+            'category_id' => ['nullable', 'integer'],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+            'tags' => ['nullable', 'array', 'max:10'],
+            'tags.*' => ['integer'],
+        ]);
+        $items = $store->transactions($filters + ['tag_ids' => $filters['tags'] ?? []]);
         $page = LengthAwarePaginator::resolveCurrentPage();
         $transactions = new LengthAwarePaginator($items->forPage($page, 8), $items->count(), 8, $page, [
             'path' => $request->url(),
@@ -77,6 +86,8 @@ class TransactionController extends Controller
             'account_id' => ['required', 'integer'],
             'category_id' => ['required', 'integer'],
             'notes' => ['nullable', 'string', 'max:500'],
+            'tags' => ['nullable', 'array', 'max:50'],
+            'tags.*' => ['required', 'string', 'max:30'],
         ]);
         $account = $store->find('accounts', (int) $validated['account_id']);
         $category = $store->find('categories', (int) $validated['category_id']);
@@ -93,6 +104,14 @@ class TransactionController extends Controller
         $validated['account_id'] = (int) $validated['account_id'];
         $validated['category_id'] = (int) $validated['category_id'];
         $validated['notes'] ??= '';
+        $tagNames = collect($validated['tags'] ?? [])->unique(fn (string $name): string => mb_strtolower(
+            preg_replace('/\s+/u', ' ', trim($name)) ?? trim($name),
+        ))->values();
+        if ($tagNames->count() > 10) {
+            throw ValidationException::withMessages(['tags' => 'Selecione no máximo 10 tags.']);
+        }
+        $validated['tag_ids'] = $store->resolveTagIds($tagNames->all());
+        unset($validated['tags']);
 
         return $validated;
     }
@@ -102,6 +121,7 @@ class TransactionController extends Controller
         return [
             'accounts' => collect($store->all('accounts'))->where('archived', false),
             'categories' => collect($store->all('categories')),
+            'tags' => collect($store->all('tags'))->sortBy('name')->values(),
         ];
     }
 }
