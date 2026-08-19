@@ -7,6 +7,33 @@ async function login(page) {
   await expect(page).toHaveURL(/dashboard/)
 }
 
+const importOfx = `OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+SECURITY:NONE
+ENCODING:USASCII
+CHARSET:1252
+
+<OFX>
+<CURDEF>BRL
+<BANKTRANLIST>
+<STMTTRN>
+<TRNTYPE>CREDIT
+<DTPOSTED>20260803000000[-03:EST]
+<TRNAMT>1250.50
+<FITID>PLAYWRIGHT-CREDIT-001
+<MEMO>Pagamento importado
+</STMTTRN>
+<STMTTRN>
+<TRNTYPE>DEBIT
+<DTPOSTED>20260804000000[-03:EST]
+<TRNAMT>-300.00
+<FITID>PLAYWRIGHT-DEBIT-001
+<MEMO>Registro ignorado
+</STMTTRN>
+</BANKTRANLIST>
+</OFX>`
+
 test('login, navigation, transaction flow and reset are usable', async ({ page }) => {
   await login(page)
   await expect(page.getByRole('heading', { name: /Sua vida financeira/i })).toBeVisible()
@@ -76,7 +103,44 @@ test('transfer menu opens the dedicated linked-account flow', async ({ page }) =
   await expect(page.getByRole('heading', { name: 'Reserva de férias' })).toBeVisible()
 })
 
-for (const path of ['/login', '/dashboard', '/transactions', '/transfers/create', '/tags', '/budgets', '/reports']) {
+test('OFX wizard uploads, classifies and imports transactions', async ({ page }) => {
+  await login(page)
+  await page.goto('/transactions/import')
+  await page.getByLabel('Conta').selectOption('1')
+  const labelInput = page.locator('.ts-control input').first()
+  await labelInput.fill('Importação Playwright')
+  await page.locator('.ts-dropdown .create').click()
+  await expect(page.locator('#label')).toHaveValue('Importação Playwright')
+  await labelInput.press('Escape')
+  const fileInput = page.getByLabel('Arquivo OFX')
+  await fileInput.setInputFiles({
+    name: 'agosto.ofx',
+    mimeType: 'application/x-ofx',
+    buffer: Buffer.from(importOfx),
+  })
+  expect(await page.locator('form[action$="/preview"]').evaluate(form => form.checkValidity())).toBe(true)
+  await Promise.all([
+    page.waitForURL(/transactions\/import\/review/),
+    page.locator('form[action$="/preview"]').evaluate(form => form.submit()),
+  ])
+
+  await expect(page.getByRole('heading', { name: /Revise as movimentações/i })).toBeVisible()
+  await expect(page.getByText('Pagamento importado', { exact: true })).toBeVisible()
+  const accessibility = await new AxeBuilder({ page }).disableRules(['color-contrast']).analyze()
+  expect(accessibility.violations.filter(v => ['serious', 'critical'].includes(v.impact))).toEqual([])
+
+  await page.getByLabel('Categoria de Pagamento importado').selectOption('1')
+  const ignoredRow = page.getByRole('row').filter({ hasText: 'Registro ignorado' })
+  await ignoredRow.getByRole('switch', { name: 'Ignorar' }).check({ force: true })
+  await page.locator('form[data-import-review]').evaluate(form => form.submit())
+
+  await expect(page.getByRole('heading', { name: 'Importação concluída' })).toBeVisible()
+  await expect(page.getByText('#Importação Playwright')).toBeVisible()
+  await page.getByRole('link', { name: 'Ver transações importadas' }).click()
+  await expect(page.getByText('Pagamento importado')).toBeVisible()
+})
+
+for (const path of ['/login', '/dashboard', '/transactions', '/transactions/import', '/transfers/create', '/tags', '/budgets', '/reports']) {
   test(`${path} has no serious accessibility violations`, async ({ page }) => {
     if (path !== '/login') await login(page)
     await page.goto(path)

@@ -3,7 +3,7 @@
 @section('eyebrow', 'ORGANIZAÇÃO')
 @section('page_title', 'Transações')
 @section('page_subtitle', 'Consulte e organize todas as movimentações financeiras.')
-@section('page_actions')<a href="{{ route('transfers.create') }}" class="btn btn-outline-primary"><i class="bi bi-arrow-left-right me-1"></i> Transferir</a><a href="{{ route('transactions.create') }}" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i> Nova transação</a>@endsection
+@section('page_actions')<a href="{{ route('imports.create') }}" class="btn btn-outline-secondary"><i class="bi bi-file-earmark-arrow-up me-1"></i> Importar OFX</a><a href="{{ route('transfers.create') }}" class="btn btn-outline-primary"><i class="bi bi-arrow-left-right me-1"></i> Transferir</a><a href="{{ route('transactions.create') }}" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i> Nova transação</a>@endsection
 @php
     $tagFilterConfig = json_encode([
         'plugins' => ['remove_button'],

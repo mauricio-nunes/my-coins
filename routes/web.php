@@ -5,6 +5,7 @@ use App\Http\Controllers\Finance\AccountController;
 use App\Http\Controllers\Finance\BudgetController;
 use App\Http\Controllers\Finance\CategoryController;
 use App\Http\Controllers\Finance\DashboardController;
+use App\Http\Controllers\Finance\OfxImportController;
 use App\Http\Controllers\Finance\ReportController;
 use App\Http\Controllers\Finance\ResetDemoController;
 use App\Http\Controllers\Finance\TagController;
@@ -19,6 +20,11 @@ Route::post('/logout', [DemoAuthController::class, 'destroy'])->name('logout');
 
 Route::middleware('demo.auth')->group(function (): void {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::get('/transactions/import', [OfxImportController::class, 'create'])->name('imports.create');
+    Route::post('/transactions/import/preview', [OfxImportController::class, 'preview'])->name('imports.preview');
+    Route::get('/transactions/import/review', [OfxImportController::class, 'review'])->name('imports.review');
+    Route::post('/transactions/import', [OfxImportController::class, 'store'])->name('imports.store');
+    Route::get('/transactions/import/result', [OfxImportController::class, 'result'])->name('imports.result');
     Route::resource('transactions', TransactionController::class);
     Route::resource('transfers', TransferController::class)->only(['create', 'store', 'edit', 'update']);
     Route::resource('accounts', AccountController::class);

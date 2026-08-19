@@ -39,6 +39,59 @@ class DemoFinanceStore
         return $attributes;
     }
 
+    public function hasImportedOfxTransaction(int $accountId, string $fitId): bool
+    {
+        return collect($this->all('transactions'))->contains(
+            fn (array $transaction): bool => ($transaction['ofx_account_id'] ?? null) === $accountId
+                && ($transaction['ofx_fitid'] ?? null) === $fitId,
+        );
+    }
+
+    public function importOfxTransactions(int $accountId, string $label, array $transactions): array
+    {
+        $data = $this->data();
+        $displayLabel = $this->cleanTagName($label);
+        $normalizedLabel = $this->normalizeTagName($displayLabel);
+        $tag = collect($data['tags'])->firstWhere('normalized_name', $normalizedLabel);
+
+        if (! $tag) {
+            $tag = [
+                'id' => (int) collect($data['tags'])->max('id') + 1,
+                'name' => $displayLabel,
+                'normalized_name' => $normalizedLabel,
+            ];
+            $data['tags'][] = $tag;
+        }
+
+        $knownKeys = collect($data['transactions'])->mapWithKeys(
+            fn (array $transaction): array => isset($transaction['ofx_account_id'], $transaction['ofx_fitid'])
+                ? [$transaction['ofx_account_id'].'|'.$transaction['ofx_fitid'] => true]
+                : [],
+        )->all();
+        $nextId = (int) collect($data['transactions'])->max('id') + 1;
+        $imported = [];
+        $duplicates = 0;
+
+        foreach ($transactions as $transaction) {
+            $key = $accountId.'|'.$transaction['ofx_fitid'];
+            if (isset($knownKeys[$key])) {
+                $duplicates++;
+
+                continue;
+            }
+
+            $transaction['id'] = $nextId++;
+            $transaction['tag_ids'] = [$tag['id']];
+            $data['transactions'][] = $transaction;
+            $imported[] = $transaction;
+            $knownKeys[$key] = true;
+        }
+
+        $this->save($data);
+
+        return ['tag' => $tag, 'transactions' => $imported, 'duplicates' => $duplicates];
+    }
+
     public function update(string $resource, int $id, array $attributes): ?array
     {
         $data = $this->data();

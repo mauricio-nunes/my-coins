@@ -240,6 +240,30 @@ function initFinanceForms() {
     source.addEventListener('change', syncAccounts)
     syncAccounts()
   })
+
+  document.querySelectorAll('[data-import-row]').forEach((row) => {
+    if (row.dataset.locked === 'true') return
+    const ignore = row.querySelector('[data-import-ignore]')
+    const transfer = row.querySelector('[data-import-transfer]')
+    const category = row.querySelector('[data-import-category]')
+    const destination = row.querySelector('[data-import-destination]')
+    if (!ignore || !category || !destination) return
+
+    const syncImportRow = () => {
+      const isIgnored = ignore.checked
+      const isTransfer = Boolean(transfer?.checked) && !isIgnored
+      if (transfer) transfer.disabled = isIgnored
+      category.disabled = isIgnored || isTransfer
+      category.required = !isIgnored && !isTransfer
+      destination.disabled = !isTransfer
+      destination.required = isTransfer
+      row.classList.toggle('import-row-muted', isIgnored)
+    }
+
+    ignore.addEventListener('change', syncImportRow)
+    transfer?.addEventListener('change', syncImportRow)
+    syncImportRow()
+  })
 }
 
 whenReady(() => {
