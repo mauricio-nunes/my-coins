@@ -28,14 +28,14 @@ class TagFlowTest extends TestCase
     {
         $this->authenticated()->post('/transactions', $this->transactionPayload([
             'tags' => ['Essencial', ' Viagem ', 'viagem'],
-        ]))->assertRedirect('/transactions/10');
+        ]))->assertRedirect('/transactions/11');
 
         $data = session('my_coins.demo_data');
-        $transaction = collect($data['transactions'])->firstWhere('id', 10);
+        $transaction = collect($data['transactions'])->firstWhere('id', 11);
 
         $this->assertCount(4, $data['tags']);
         $this->assertSame([1, 4], $transaction['tag_ids']);
-        $this->get('/transactions/10')->assertOk()->assertSee('#Essencial')->assertSee('#Viagem');
+        $this->get('/transactions/11')->assertOk()->assertSee('#Essencial')->assertSee('#Viagem');
     }
 
     public function test_transactions_can_be_filtered_by_all_selected_tags(): void
@@ -110,7 +110,7 @@ class TagFlowTest extends TestCase
         $this->authenticated()->delete('/tags/1')->assertRedirect('/tags');
 
         $data = session('my_coins.demo_data');
-        $this->assertCount(9, $data['transactions']);
+        $this->assertCount(10, $data['transactions']);
         $this->assertFalse(collect($data['tags'])->contains('id', 1));
         $this->assertFalse(collect($data['transactions'])->contains(
             fn (array $transaction): bool => in_array(1, $transaction['tag_ids'], true),

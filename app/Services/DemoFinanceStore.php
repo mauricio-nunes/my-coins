@@ -72,22 +72,35 @@ class DemoFinanceStore
         $transactions = collect($this->all('transactions'));
 
         $tags = collect($this->all('tags'))->keyBy('id');
+        $accounts = collect($this->all('accounts'))->keyBy('id');
 
         return $transactions
-            ->when($filters['search'] ?? null, function (Collection $items, string $search) use ($tags): Collection {
+            ->when($filters['search'] ?? null, function (Collection $items, string $search) use ($accounts, $tags): Collection {
                 $needle = mb_strtolower($search);
 
-                return $items->filter(function (array $item) use ($needle, $tags): bool {
+                return $items->filter(function (array $item) use ($accounts, $needle, $tags): bool {
                     $tagNames = collect($item['tag_ids'] ?? [])->map(
                         fn (int $id): string => mb_strtolower($tags->get($id)['name'] ?? ''),
                     );
+                    $accountNames = $item['type'] === 'transfer'
+                        ? collect([$item['source_account_id'], $item['destination_account_id']])->map(
+                            fn (int $id): string => mb_strtolower($accounts->get($id)['name'] ?? ''),
+                        )
+                        : collect();
 
-                    return str_contains(mb_strtolower($item['description']), $needle)
-                        || $tagNames->contains(fn (string $name): bool => str_contains($name, $needle));
+                    return str_contains(mb_strtolower($item['description'] ?? ''), $needle)
+                        || $tagNames->contains(fn (string $name): bool => str_contains($name, $needle))
+                        || $accountNames->contains(fn (string $name): bool => str_contains($name, $needle));
                 });
             })
             ->when($filters['type'] ?? null, fn (Collection $items, string $type) => $items->where('type', $type))
-            ->when($filters['account_id'] ?? null, fn (Collection $items, mixed $id) => $items->where('account_id', (int) $id))
+            ->when($filters['account_id'] ?? null, function (Collection $items, mixed $id): Collection {
+                $accountId = (int) $id;
+
+                return $items->filter(fn (array $item): bool => $item['type'] === 'transfer'
+                    ? $item['source_account_id'] === $accountId || $item['destination_account_id'] === $accountId
+                    : $item['account_id'] === $accountId);
+            })
             ->when($filters['category_id'] ?? null, fn (Collection $items, mixed $id) => $items->where('category_id', (int) $id))
             ->when($filters['from'] ?? null, fn (Collection $items, string $date) => $items->where('date', '>=', $date))
             ->when($filters['to'] ?? null, fn (Collection $items, string $date) => $items->where('date', '<=', $date))
@@ -166,9 +179,9 @@ class DemoFinanceStore
             return 0;
         }
 
-        return (int) $account['opening_balance'] + $this->transactions(['account_id' => $accountId])->sum(
-            fn (array $transaction): int => $transaction['type'] === 'income' ? $transaction['amount'] : -$transaction['amount'],
-        );
+        return (int) $account['opening_balance'] + $this->transactions(['account_id' => $accountId])
+            ->where('date', '<=', now()->format('Y-m-d'))
+            ->sum(fn (array $transaction): int => $this->transactionEffect($transaction, $accountId));
     }
 
     public function dashboard(): array
@@ -213,7 +226,7 @@ class DemoFinanceStore
                 'amount' => $items->sum('amount'),
             ],
         )->sortByDesc('amount')->values();
-        $byMonth = $transactions->groupBy(fn (array $item): string => substr($item['date'], 0, 7))->map(
+        $byMonth = $transactions->whereIn('type', ['income', 'expense'])->groupBy(fn (array $item): string => substr($item['date'], 0, 7))->map(
             fn (Collection $items, string $month): array => [
                 'month' => $month,
                 'income' => $items->where('type', 'income')->sum('amount'),
@@ -222,6 +235,23 @@ class DemoFinanceStore
         )->sortBy('month')->values();
 
         return compact('transactions', 'income', 'expenses', 'byCategory', 'byMonth') + ['result' => $income - $expenses];
+    }
+
+    public function transactionEffect(array $transaction, int $accountId): int
+    {
+        if ($transaction['type'] === 'transfer') {
+            if ($transaction['source_account_id'] === $accountId) {
+                return -$transaction['amount'];
+            }
+
+            return $transaction['destination_account_id'] === $accountId ? $transaction['amount'] : 0;
+        }
+
+        if ($transaction['account_id'] !== $accountId) {
+            return 0;
+        }
+
+        return $transaction['type'] === 'income' ? $transaction['amount'] : -$transaction['amount'];
     }
 
     private function data(): array
@@ -304,6 +334,7 @@ class DemoFinanceStore
                 ['id' => 7, 'description' => 'Farmácia', 'type' => 'expense', 'amount' => 13780, 'date' => $date(1), 'account_id' => 1, 'category_id' => 7, 'notes' => 'Medicamentos', 'tag_ids' => [1]],
                 ['id' => 8, 'description' => 'Salário mensal', 'type' => 'income', 'amount' => 780000, 'date' => $today->subMonth()->day(5)->format('Y-m-d'), 'account_id' => 1, 'category_id' => 1, 'notes' => 'Crédito em conta', 'tag_ids' => [1]],
                 ['id' => 9, 'description' => 'Aluguel', 'type' => 'expense', 'amount' => 235000, 'date' => $today->subMonth()->day(7)->format('Y-m-d'), 'account_id' => 1, 'category_id' => 3, 'notes' => 'Apartamento', 'tag_ids' => [1]],
+                ['id' => 10, 'description' => 'Reserva mensal', 'type' => 'transfer', 'amount' => 50000, 'date' => $date(3), 'source_account_id' => 1, 'destination_account_id' => 2, 'account_id' => null, 'category_id' => null, 'notes' => '', 'tag_ids' => []],
             ],
             'budgets' => [
                 ['id' => 1, 'category_id' => 3, 'month' => $month, 'limit' => 250000],

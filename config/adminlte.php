@@ -62,6 +62,7 @@ return [
         ['text' => 'Dashboard', 'route' => 'dashboard', 'icon' => 'bi bi-grid-1x2-fill'],
         ['header' => 'ORGANIZAÇÃO'],
         ['text' => 'Transações', 'route' => 'transactions.index', 'active' => ['transactions*'], 'icon' => 'bi bi-arrow-left-right'],
+        ['text' => 'Transferir', 'route' => 'transfers.create', 'active' => ['transfers*'], 'icon' => 'bi bi-arrow-right-circle'],
         ['text' => 'Contas', 'route' => 'accounts.index', 'active' => ['accounts*'], 'icon' => 'bi bi-wallet2'],
         ['text' => 'Categorias', 'route' => 'categories.index', 'active' => ['categories*'], 'icon' => 'bi bi-tags'],
         ['text' => 'Tags', 'route' => 'tags.index', 'active' => ['tags*'], 'icon' => 'bi bi-hash'],

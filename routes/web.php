@@ -9,6 +9,7 @@ use App\Http\Controllers\Finance\ReportController;
 use App\Http\Controllers\Finance\ResetDemoController;
 use App\Http\Controllers\Finance\TagController;
 use App\Http\Controllers\Finance\TransactionController;
+use App\Http\Controllers\Finance\TransferController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard');
@@ -19,6 +20,7 @@ Route::post('/logout', [DemoAuthController::class, 'destroy'])->name('logout');
 Route::middleware('demo.auth')->group(function (): void {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
     Route::resource('transactions', TransactionController::class);
+    Route::resource('transfers', TransferController::class)->only(['create', 'store', 'edit', 'update']);
     Route::resource('accounts', AccountController::class);
     Route::resource('categories', CategoryController::class)->except('show');
     Route::resource('tags', TagController::class)->only(['index', 'store', 'edit', 'update', 'destroy']);

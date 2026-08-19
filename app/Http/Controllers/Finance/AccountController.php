@@ -35,7 +35,12 @@ class AccountController extends Controller
         $item = $store->find('accounts', $account) ?? abort(404);
         $transactions = $store->transactions(['account_id' => $account])->take(10);
 
-        return view('accounts.show', ['account' => $item + ['balance' => $store->balance($account)], 'transactions' => $transactions, 'categories' => collect($store->all('categories'))->keyBy('id')]);
+        return view('accounts.show', [
+            'account' => $item + ['balance' => $store->balance($account)],
+            'transactions' => $transactions,
+            'accounts' => collect($store->all('accounts'))->keyBy('id'),
+            'categories' => collect($store->all('categories'))->keyBy('id'),
+        ]);
     }
 
     public function edit(int $account, DemoFinanceStore $store): View

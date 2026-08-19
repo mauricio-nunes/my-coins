@@ -227,6 +227,19 @@ function initFinanceForms() {
     type.addEventListener('change', syncCategories)
     syncCategories()
   }
+
+  document.querySelectorAll('[data-transfer-form]').forEach((form) => {
+    const source = form.querySelector('#source_account_id')
+    const destination = form.querySelector('#destination_account_id')
+    if (!source || !destination) return
+    const syncAccounts = () => {
+      destination.querySelectorAll('option').forEach((option) => {
+        option.disabled = option.value !== '' && option.value === source.value && !option.selected
+      })
+    }
+    source.addEventListener('change', syncAccounts)
+    syncAccounts()
+  })
 }
 
 whenReady(() => {

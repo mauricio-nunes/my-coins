@@ -17,7 +17,7 @@ class TransactionController extends Controller
     {
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:120'],
-            'type' => ['nullable', 'in:income,expense'],
+            'type' => ['nullable', 'in:income,expense,transfer'],
             'account_id' => ['nullable', 'integer'],
             'category_id' => ['nullable', 'integer'],
             'from' => ['nullable', 'date'],
@@ -32,7 +32,7 @@ class TransactionController extends Controller
             'query' => $request->query(),
         ]);
 
-        return view('transactions.index', $this->formData($store) + compact('transactions', 'filters'));
+        return view('transactions.index', $this->formData($store, true) + compact('transactions', 'filters'));
     }
 
     public function create(DemoFinanceStore $store): View
@@ -51,19 +51,23 @@ class TransactionController extends Controller
     {
         $item = $store->find('transactions', $transaction) ?? abort(404);
 
-        return view('transactions.show', $this->formData($store) + ['transaction' => $item]);
+        return view('transactions.show', $this->formData($store, true) + ['transaction' => $item]);
     }
 
-    public function edit(int $transaction, DemoFinanceStore $store): View
+    public function edit(int $transaction, DemoFinanceStore $store): View|RedirectResponse
     {
         $item = $store->find('transactions', $transaction) ?? abort(404);
+        if ($item['type'] === 'transfer') {
+            return redirect()->route('transfers.edit', $transaction);
+        }
 
         return view('transactions.form', $this->formData($store) + ['transaction' => $item]);
     }
 
     public function update(Request $request, int $transaction, DemoFinanceStore $store): RedirectResponse
     {
-        abort_unless($store->find('transactions', $transaction), 404);
+        $existing = $store->find('transactions', $transaction) ?? abort(404);
+        abort_if($existing['type'] === 'transfer', 404);
         $store->update('transactions', $transaction, $this->validated($request, $store));
 
         return redirect()->route('transactions.show', $transaction)->with('success', 'Transação atualizada com sucesso.');
@@ -116,10 +120,13 @@ class TransactionController extends Controller
         return $validated;
     }
 
-    private function formData(DemoFinanceStore $store): array
+    private function formData(DemoFinanceStore $store, bool $includeArchived = false): array
     {
         return [
-            'accounts' => collect($store->all('accounts'))->where('archived', false),
+            'accounts' => collect($store->all('accounts'))->when(
+                ! $includeArchived,
+                fn ($accounts) => $accounts->where('archived', false),
+            )->values(),
             'categories' => collect($store->all('categories')),
             'tags' => collect($store->all('tags'))->sortBy('name')->values(),
         ];

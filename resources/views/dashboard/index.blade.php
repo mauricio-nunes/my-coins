@@ -4,6 +4,7 @@
 @section('page_title', 'Sua vida financeira em um só lugar')
 @section('page_subtitle', 'Acompanhe o mês atual e tome decisões com clareza.')
 @section('page_actions')
+    <a href="{{ route('transfers.create') }}" class="btn btn-outline-primary"><i class="bi bi-arrow-left-right me-1"></i> Transferir</a>
     <a href="{{ route('transactions.create') }}" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i> Nova transação</a>
 @endsection
 
@@ -60,7 +61,13 @@
                 <div class="card-header border-0 bg-transparent d-flex justify-content-between align-items-center"><h2 class="h5 mb-0">Transações recentes</h2><a href="{{ route('transactions.index') }}" class="small">Ver todas</a></div>
                 <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Descrição</th><th>Data</th><th class="text-end">Valor</th></tr></thead><tbody>
                     @foreach ($summary['recent'] as $transaction)
-                        <tr><td><a class="text-decoration-none fw-medium text-body" href="{{ route('transactions.show', $transaction['id']) }}">{{ $transaction['description'] }}</a><div class="small text-body-secondary">{{ $categories[$transaction['category_id']]['name'] }}</div></td><td>{{ \Carbon\Carbon::parse($transaction['date'])->format('d/m/Y') }}</td><td class="text-end fw-semibold {{ $transaction['type'] === 'income' ? 'text-success' : 'text-danger' }}"><x-money :value="($transaction['type'] === 'income' ? 1 : -1) * $transaction['amount']" :signed="true" /></td></tr>
+                        @php
+                            $isTransfer = $transaction['type'] === 'transfer';
+                            $source = $isTransfer ? $accountMap[$transaction['source_account_id']] : null;
+                            $destination = $isTransfer ? $accountMap[$transaction['destination_account_id']] : null;
+                            $description = $transaction['description'] ?: "Transferência de {$source['name']} para {$destination['name']}";
+                        @endphp
+                        <tr><td><a class="text-decoration-none fw-medium text-body" href="{{ route('transactions.show', $transaction['id']) }}">{{ $description }}</a><div class="small text-body-secondary">{{ $isTransfer ? $source['name'].' → '.$destination['name'] : $categories[$transaction['category_id']]['name'] }}</div></td><td>{{ \Carbon\Carbon::parse($transaction['date'])->format('d/m/Y') }}</td><td class="text-end fw-semibold {{ $transaction['type'] === 'income' ? 'text-success' : ($transaction['type'] === 'expense' ? 'text-danger' : 'text-body') }}">@if($isTransfer)<x-money :value="$transaction['amount']" />@else<x-money :value="($transaction['type'] === 'income' ? 1 : -1) * $transaction['amount']" :signed="true" />@endif</td></tr>
                     @endforeach
                 </tbody></table></div>
             </div>

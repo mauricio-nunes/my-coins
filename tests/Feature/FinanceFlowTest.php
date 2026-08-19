@@ -13,7 +13,7 @@ class FinanceFlowTest extends TestCase
 
     public function test_core_pages_render_in_portuguese(): void
     {
-        foreach (['/dashboard', '/transactions', '/accounts', '/categories', '/tags', '/budgets', '/reports'] as $path) {
+        foreach (['/dashboard', '/transactions', '/transfers/create', '/accounts', '/categories', '/tags', '/budgets', '/reports'] as $path) {
             $this->authenticated()->get($path)->assertOk();
         }
     }
@@ -24,12 +24,12 @@ class FinanceFlowTest extends TestCase
             'description' => 'Café com amigos', 'type' => 'expense', 'amount' => '25,90',
             'date' => now()->format('Y-m-d'), 'account_id' => 1, 'category_id' => 6, 'notes' => '',
         ];
-        $this->authenticated()->post('/transactions', $payload)->assertRedirect('/transactions/10');
+        $this->authenticated()->post('/transactions', $payload)->assertRedirect('/transactions/11');
         $this->get('/transactions?search=Caf%C3%A9')->assertSee('Café com amigos');
-        $this->put('/transactions/10', array_merge($payload, ['description' => 'Café atualizado']))->assertRedirect('/transactions/10');
-        $this->get('/transactions/10')->assertSee('Café atualizado');
-        $this->delete('/transactions/10')->assertRedirect('/transactions');
-        $this->get('/transactions/10')->assertNotFound();
+        $this->put('/transactions/11', array_merge($payload, ['description' => 'Café atualizado']))->assertRedirect('/transactions/11');
+        $this->get('/transactions/11')->assertSee('Café atualizado');
+        $this->delete('/transactions/11')->assertRedirect('/transactions');
+        $this->get('/transactions/11')->assertNotFound();
     }
 
     public function test_transaction_rejects_a_category_from_the_wrong_type(): void

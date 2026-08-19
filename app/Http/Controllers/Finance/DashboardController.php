@@ -15,6 +15,7 @@ class DashboardController extends Controller
         $accounts = collect($store->all('accounts'))->where('archived', false)->map(
             fn (array $account): array => $account + ['balance' => $store->balance($account['id'])],
         );
+        $accountMap = collect($store->all('accounts'))->keyBy('id');
         $categories = collect($store->all('categories'))->keyBy('id');
         $budgets = collect($store->all('budgets'))->where('month', now()->format('Y-m'))->map(
             fn (array $budget): array => $budget + [
@@ -36,6 +37,6 @@ class DashboardController extends Controller
             'legend' => ['position' => 'top'],
         ];
 
-        return view('dashboard.index', compact('summary', 'accounts', 'budgets', 'categories', 'report', 'cashFlowChart'));
+        return view('dashboard.index', compact('summary', 'accounts', 'accountMap', 'budgets', 'categories', 'report', 'cashFlowChart'));
     }
 }
