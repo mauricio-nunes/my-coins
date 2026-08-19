@@ -1,0 +1,12 @@
+@extends('layouts.app')
+@php($editing = (bool) $budget)
+@section('title', $editing ? 'Editar orçamento' : 'Novo orçamento')
+@section('eyebrow', 'ORÇAMENTOS')
+@section('page_title', $editing ? 'Editar orçamento' : 'Novo orçamento')
+@section('page_subtitle', 'Escolha uma categoria de despesa e o limite mensal.')
+@section('page_actions')<a href="{{ route('budgets.index') }}" class="btn btn-outline-secondary">Cancelar</a>@endsection
+@section('page_content')
+<div class="row"><div class="col-xl-7"><div class="card border-0 shadow-sm"><div class="card-body p-4"><form method="post" action="{{ $editing ? route('budgets.update',$budget['id']) : route('budgets.store') }}">@csrf @if($editing)@method('put')@endif
+<div class="row g-3"><div class="col-md-6"><label for="category_id" class="form-label">Categoria</label><select id="category_id" name="category_id" class="form-select @error('category_id') is-invalid @enderror" required><option value="">Selecione</option>@foreach($categories as $category)<option value="{{ $category['id'] }}" @selected(old('category_id',$budget['category_id']??'')==$category['id'])>{{ $category['name'] }}</option>@endforeach</select><x-field-error name="category_id" /></div><div class="col-md-6"><label for="month" class="form-label">Mês</label><input id="month" type="month" name="month" value="{{ old('month',$budget['month']??now()->format('Y-m')) }}" class="form-control @error('month') is-invalid @enderror" required><x-field-error name="month" /></div><div class="col-md-6"><label for="limit" class="form-label">Limite</label><div class="input-group"><span class="input-group-text">R$</span><input id="limit" name="limit" value="{{ old('limit',$budget?number_format($budget['limit']/100,2,',',''):'') }}" class="form-control @error('limit') is-invalid @enderror" required></div><x-field-error name="limit" /></div></div>
+<div class="d-flex justify-content-between mt-4">@if($editing)<button type="submit" form="delete-budget" class="btn btn-outline-danger">Excluir</button>@else<span></span>@endif<div class="d-flex gap-2"><a href="{{ route('budgets.index') }}" class="btn btn-light">Cancelar</a><button class="btn btn-primary">{{ $editing?'Salvar alterações':'Criar orçamento' }}</button></div></div></form>@if($editing)<form id="delete-budget" action="{{ route('budgets.destroy',$budget['id']) }}" method="post" data-confirm="Excluir este orçamento?">@csrf @method('delete')</form>@endif</div></div></div></div>
+@endsection

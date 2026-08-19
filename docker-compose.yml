@@ -1,0 +1,45 @@
+version: "3.8"
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        APP_UID: ${APP_UID:-1000}
+        APP_GID: ${APP_GID:-1000}
+    environment:
+      XDEBUG_MODE: ${XDEBUG_MODE:-off}
+      PHP_IDE_CONFIG: serverName=my-coins
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/var/www/html
+
+  vite:
+    image: node:22-bookworm-slim
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
+    working_dir: /var/www/html
+    command: npm run dev
+    environment:
+      NPM_CONFIG_CACHE: /tmp/npm-cache
+      VITE_BROWSER_HOST: ${VITE_BROWSER_HOST:-localhost}
+      VITE_APP_ORIGIN: ${APP_URL:-http://localhost:8000}
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/var/www/html
+
+  browser:
+    image: mcr.microsoft.com/playwright:v1.62.1-noble
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
+    working_dir: /var/www/html
+    environment:
+      NPM_CONFIG_CACHE: /tmp/npm-cache
+      PLAYWRIGHT_BASE_URL: http://app:8000
+      PLAYWRIGHT_SKIP_WEBSERVER: "1"
+    depends_on:
+      - app
+    volumes:
+      - .:/var/www/html

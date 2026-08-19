@@ -1,0 +1,69 @@
+/*
+ * AdminLTE 4 stylesheet entry point.
+ *
+ * Published by `php artisan adminlte:install`. Add this file to your
+ * vite.config.js input array.
+ *
+ * Option A (default): import the prebuilt CSS — fastest, no SCSS toolchain.
+ */
+@import 'bootstrap-icons/font/bootstrap-icons.css';
+@import 'overlayscrollbars/overlayscrollbars.css';
+@import 'admin-lte/dist/css/adminlte.css';
+
+:root {
+  --mc-primary: #0f766e;
+  --mc-primary-soft: #ccfbf1;
+  --mc-ink: #163234;
+}
+
+body { letter-spacing: .005em; }
+.app-main { background: color-mix(in srgb, var(--bs-body-bg) 92%, #dff5f2); }
+.app-sidebar .brand-link { text-decoration: none; }
+.app-sidebar .brand-text { letter-spacing: -.025em; }
+.app-sidebar .nav-link.active { background: rgba(45, 212, 191, .18); color: #fff; }
+.eyebrow { color: var(--mc-primary); font-size: .72rem; font-weight: 700; letter-spacing: .14em; }
+.card { --bs-card-border-radius: .9rem; }
+.card-header { padding: 1.15rem 1.25rem; }
+.table > thead th { color: var(--bs-secondary-color); font-size: .75rem; font-weight: 600; letter-spacing: .045em; text-transform: uppercase; white-space: nowrap; }
+.table > :not(caption) > * > * { padding: .9rem 1rem; }
+.progress { height: .55rem; border-radius: 999px; }
+.metric-card { overflow: hidden; }
+.metric-card::before { background: var(--mc-primary); content: ''; height: 3px; inset: 0 0 auto; position: absolute; }
+.metric-icon, .category-icon, .account-symbol, .login-icon, .user-avatar { align-items: center; display: inline-flex; justify-content: center; }
+.metric-icon { border-radius: .75rem; font-size: 1.25rem; height: 2.75rem; width: 2.75rem; }
+.category-icon { background: color-mix(in srgb, var(--category-color) 15%, transparent); border-radius: .7rem; color: var(--category-color); flex: 0 0 auto; height: 2.6rem; width: 2.6rem; }
+.account-dot { border-radius: 50%; box-shadow: 0 0 0 5px color-mix(in srgb, currentColor 12%, transparent); height: .7rem; width: .7rem; }
+.account-card { border-top: 4px solid var(--account-color) !important; }
+.account-symbol { background: color-mix(in srgb, var(--account-color) 14%, transparent); border-radius: .8rem; color: var(--account-color); font-size: 1.35rem; height: 3rem; width: 3rem; }
+.account-summary { border-left: 5px solid var(--account-color) !important; }
+.transaction-hero { background: color-mix(in srgb, var(--mc-primary) 7%, var(--bs-body-bg)); }
+.detail-list dt { color: var(--bs-secondary-color); font-weight: 500; }
+.detail-list dd { font-weight: 500; margin-bottom: 1.25rem; }
+.login-page { background: radial-gradient(circle at top, #d7f4ef, #edf5f4 45%, #e5e7eb); }
+.login-box { width: min(440px, calc(100% - 2rem)); }
+.login-box .card { border-radius: 1.1rem; box-shadow: 0 1rem 3rem rgba(15, 56, 53, .12); }
+.login-box .card-header { border: 0; padding: 1.75rem 1.5rem .5rem; }
+.login-box .card-body { padding: 1.5rem 2rem 2rem; }
+.login-icon { background: var(--mc-primary-soft); border-radius: 1rem; color: var(--mc-primary); font-size: 1.6rem; height: 3.6rem; width: 3.6rem; }
+.demo-credentials { background: color-mix(in srgb, var(--mc-primary) 8%, var(--bs-body-bg)); border: 1px solid color-mix(in srgb, var(--mc-primary) 20%, transparent); }
+.user-avatar { background: var(--mc-primary-soft); border-radius: 50%; color: var(--mc-primary); height: 1.8rem; margin-right: .4rem; width: 1.8rem; }
+[data-bs-theme='dark'] .login-page { background: radial-gradient(circle at top, #163a38, #151c1d 55%, #101415); }
+
+@media (max-width: 575.98px) {
+  .app-content-header { padding-top: 1rem !important; }
+  .display-6 { font-size: 2rem; }
+  .login-box .card-body { padding-inline: 1.25rem; }
+  .table > :not(caption) > * > * { padding: .75rem; }
+}
+
+/*
+ * Option B: compile from source to customise SCSS variables. Comment out
+ * the admin-lte CSS import above and use this instead (requires `sass`):
+ *
+ *   // resources/css/adminlte.scss
+ *   $primary: #6610f2;            // your overrides BEFORE the import
+ *   $lte-sidebar-width: 280px;
+ *   @import 'admin-lte/src/scss/adminlte';
+ *
+ * See https://adminlte.io/themes/v4/docs/customization.html
+ */
