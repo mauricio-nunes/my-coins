@@ -11,10 +11,20 @@ services:
       XDEBUG_MODE: ${XDEBUG_MODE:-off}
       PHP_IDE_CONFIG: serverName=my-coins
       PLAYWRIGHT_TEST: ${PLAYWRIGHT_TEST:-0}
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: ${COMPOSE_DB_DATABASE:-my_coins}
+      DB_USERNAME: ${COMPOSE_DB_USERNAME:-my_coins}
+      DB_PASSWORD: ${COMPOSE_DB_PASSWORD:-mycoins_local}
+      SESSION_DRIVER: database
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
     volumes:
       - .:/var/www/html
 
@@ -38,9 +48,29 @@ services:
     working_dir: /var/www/html
     environment:
       NPM_CONFIG_CACHE: /tmp/npm-cache
-      PLAYWRIGHT_BASE_URL: http://app:8000
+      PLAYWRIGHT_BASE_URL: ${PLAYWRIGHT_BASE_URL:-http://app:8000}
       PLAYWRIGHT_SKIP_WEBSERVER: "1"
     depends_on:
       - app
     volumes:
       - .:/var/www/html
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ${COMPOSE_DB_DATABASE:-my_coins}
+      MYSQL_USER: ${COMPOSE_DB_USERNAME:-my_coins}
+      MYSQL_PASSWORD: ${COMPOSE_DB_PASSWORD:-mycoins_local}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root_local}
+    ports:
+      - "${DB_FORWARD_PORT:-3307}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_ROOT_PASSWORD:-root_local}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  mysql-data:

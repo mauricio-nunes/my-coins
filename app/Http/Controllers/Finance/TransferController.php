@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Finance;
 
 use App\Http\Controllers\Controller;
-use App\Services\DemoFinanceStore;
+use App\Services\FinanceStore;
 use App\Support\Money;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,7 +13,7 @@ use Illuminate\View\View;
 
 class TransferController extends Controller
 {
-    public function create(Request $request, DemoFinanceStore $store): View
+    public function create(Request $request, FinanceStore $store): View
     {
         $defaultSourceId = $request->integer('source_account_id');
         $defaultSource = $store->find('accounts', $defaultSourceId);
@@ -25,14 +25,14 @@ class TransferController extends Controller
         ]);
     }
 
-    public function store(Request $request, DemoFinanceStore $store): RedirectResponse
+    public function store(Request $request, FinanceStore $store): RedirectResponse
     {
         $transfer = $store->create('transactions', $this->validated($request, $store));
 
         return redirect()->route('transactions.show', $transfer['id'])->with('success', 'Transferência registrada com sucesso.');
     }
 
-    public function edit(int $transfer, DemoFinanceStore $store): View
+    public function edit(int $transfer, FinanceStore $store): View
     {
         $item = $store->find('transactions', $transfer) ?? abort(404);
         abort_unless($item['type'] === 'transfer', 404);
@@ -44,7 +44,7 @@ class TransferController extends Controller
         ]);
     }
 
-    public function update(Request $request, int $transfer, DemoFinanceStore $store): RedirectResponse
+    public function update(Request $request, int $transfer, FinanceStore $store): RedirectResponse
     {
         $item = $store->find('transactions', $transfer) ?? abort(404);
         abort_unless($item['type'] === 'transfer', 404);
@@ -53,7 +53,7 @@ class TransferController extends Controller
         return redirect()->route('transactions.show', $transfer)->with('success', 'Transferência atualizada com sucesso.');
     }
 
-    private function validated(Request $request, DemoFinanceStore $store, ?array $existing = null): array
+    private function validated(Request $request, FinanceStore $store, ?array $existing = null): array
     {
         $validated = $request->validate([
             'source_account_id' => ['required', 'integer', 'different:destination_account_id'],
@@ -93,7 +93,7 @@ class TransferController extends Controller
         ];
     }
 
-    private function accounts(DemoFinanceStore $store, ?array $transfer = null): Collection
+    private function accounts(FinanceStore $store, ?array $transfer = null): Collection
     {
         $referenced = $transfer ? [$transfer['source_account_id'], $transfer['destination_account_id']] : [];
 

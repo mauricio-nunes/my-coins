@@ -7,7 +7,7 @@ ARG APP_GID=1000
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git libicu-dev libzip-dev unzip \
-    && docker-php-ext-install intl pcntl zip \
+    && docker-php-ext-install intl pcntl pdo_mysql zip \
     && pecl install xdebug \
     && docker-php-ext-enable xdebug \
     && rm -rf /var/lib/apt/lists/*
@@ -22,4 +22,4 @@ WORKDIR /var/www/html
 USER app
 
 EXPOSE 8000 9003
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000", "--no-reload"]

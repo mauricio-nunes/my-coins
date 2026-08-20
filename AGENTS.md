@@ -2,36 +2,37 @@
 
 ## Project Structure & Module Organization
 
-My Coins is a Laravel 13 and AdminLTE 4 personal-finance prototype. PHP application code lives in `app/`; controllers are grouped under `app/Http/Controllers/Finance`, session-backed mock data is managed by `app/Services/DemoFinanceStore.php`, and shared helpers live in `app/Support/`. Browser routes are defined in `routes/web.php`.
+My Coins is a Laravel 13/AdminLTE 4 personal-finance application. PHP code lives in `app/`; finance controllers are under `app/Http/Controllers/Finance`, persistence rules belong in `app/Services/FinanceStore.php`, and shared helpers live in `app/Support/`. Routes are in `routes/web.php`.
 
-Blade pages and components are in `resources/views/`; frontend entry points are `resources/css/adminlte.css` and `resources/js/adminlte.js`. Configuration belongs in `config/`, with environment defaults documented in `.env.example`. PHPUnit tests live in `tests/Feature` and `tests/Unit`; Playwright scenarios live in `tests/browser`.
+Blade templates are in `resources/views/`; frontend entry points are `resources/css/adminlte.css` and `resources/js/adminlte.js`. Database migrations and seeders live in `database/`. PHPUnit tests are split between `tests/Feature` and `tests/Unit`; Playwright scenarios are in `tests/browser`.
 
 ## Build, Test, and Development Commands
 
-Docker is the supported default workflow:
+Docker is the supported workflow:
 
-- `make setup` builds containers, installs dependencies, generates the app key, and builds assets.
-- `make fix-permissions` repairs generated `node_modules` and `public/build` ownership after container UID conflicts.
-- `make up` starts Laravel on port 8000 and Vite on port 5173.
-- `make build` creates production frontend assets.
-- `make test` runs the PHPUnit suite.
-- `make e2e` runs Playwright desktop/mobile flows and axe accessibility checks.
-- `make format` applies Laravel Pint formatting.
-- `make debug` starts the stack with Xdebug enabled on port 9003.
+- `make setup` builds containers, installs dependencies, migrates MySQL, creates the owner, and builds assets.
+- `make up` starts Laravel, Vite, and MySQL.
+- `make build` builds production assets.
+- `make test` runs PHPUnit against `my_coins_testing`.
+- `make e2e` runs desktop/mobile Playwright and axe checks against `my_coins_e2e`.
+- `make format` applies Laravel Pint.
+- `make fix-permissions` repairs ownership of generated frontend files.
+- `make debug` enables Xdebug on port 9003.
 
-For Docker Compose v2, append `COMPOSE="docker compose"` to Make commands.
-The `up` and `debug` targets recreate disposable service containers to avoid the legacy Compose 1.29 `ContainerConfig` bug; do not replace this with a plain `docker-compose up` without dropping v1 support.
+For Compose v2, append `COMPOSE="docker compose"`. Keep the disposable-container cleanup in `up`/`debug`; it preserves support for legacy Compose 1.29 and its `ContainerConfig` bug.
 
 ## Coding Style & Naming Conventions
 
-Use four spaces in PHP and Blade, two spaces in JavaScript, and follow PSR-12/Laravel conventions. Run Pint before submitting changes. Use `StudlyCase` for PHP classes, `camelCase` for methods and variables, and descriptive controller names such as `BudgetController`. Blade files use lowercase feature directories and conventional names such as `accounts/index.blade.php`.
+Use four spaces in PHP and Blade, two in JavaScript, and follow PSR-12/Laravel conventions. Use `StudlyCase` classes, `camelCase` methods, and descriptive names such as `BudgetController`. Blade files use lowercase feature directories, for example `accounts/index.blade.php`.
 
-Keep monetary values as integer cents. User-facing copy, validation, dates, and currency should remain pt-BR/BRL. Finance data must stay consistent through `DemoFinanceStore` rather than page-specific fixtures.
+Store money as integer cents. Keep user-facing text, validation, dates, and currency in pt-BR/BRL. Scope every finance query to the authenticated owner and centralize persistence behavior in `FinanceStore`.
 
 ## Testing Guidelines
 
-Name PHPUnit tests by behavior, for example `test_used_category_cannot_be_deleted`. Add feature tests for routes, validation, and session mutations; add unit tests for calculations and formatting. UI changes should include or update Playwright coverage and must not introduce serious or critical axe violations.
+Name tests by behavior, such as `test_used_category_cannot_be_deleted`. Cover routes, validation, ownership, database mutations, and calculations. Visible changes require Playwright coverage and no serious or critical axe violations. Never point test configuration at development or production databases.
 
-## Commit & Pull Request Guidelines
+## Commits, Pull Requests & Security
 
-History currently contains only `Initial commit`, so no established convention exists. Use short, imperative subjects such as `Add credit card account type`. Pull requests should explain behavior and validation changes, list commands run, link relevant issues, and include desktop/mobile screenshots for visible UI changes. Never commit `.env`, credentials, `vendor/`, `node_modules/`, or generated build artifacts.
+Use short imperative commits, for example `Persist finance data in MySQL`. PRs should describe behavior, list verification commands, link issues, and include desktop/mobile screenshots for UI changes.
+
+Never commit `.env`, credentials, `vendor/`, `node_modules/`, or build artifacts. Create the owner with `php artisan mycoins:install`; recover access with `php artisan mycoins:reset-password`. Preserve forced initial password changes, database sessions, soft-deleted audit records, and ownership boundaries.

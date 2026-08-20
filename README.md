@@ -1,67 +1,49 @@
 # My Coins
 
-Protótipo navegável de uma aplicação de finanças pessoais em Laravel 13 e AdminLTE 4. Os dados são fictícios, ficam na sessão do navegador e podem ser restaurados pelo menu superior.
+Aplicação de finanças pessoais em Laravel 13 e AdminLTE 4, com autenticação de proprietário único e persistência em MySQL 8.
 
 ## O que está incluído
 
 - Dashboard com saldo, receitas, despesas, fluxo de caixa e progresso dos orçamentos.
-- Fluxos de transações, contas, categorias e orçamentos com validação em português.
-- Relatórios filtráveis com gráficos e detalhamento por categoria.
-- Login demonstrativo, tema claro/escuro e layouts responsivos.
-- PHPUnit, Playwright e verificações de acessibilidade com axe.
-- Docker, Vite e Xdebug configurados para desenvolvimento local.
+- Fluxos de transações, transferências, contas, categorias, tags e orçamentos.
+- Importação OFX em três etapas, com classificação, transferências e detecção de duplicidade.
+- Relatórios filtráveis, gráficos e detalhamento por categoria.
+- Login protegido, troca obrigatória da senha inicial e recuperação pela CLI.
+- PHPUnit, Playwright desktop/mobile e verificações de acessibilidade com axe.
 
 ## Executar com Docker
 
 Pré-requisitos: Docker e `docker-compose` (ou Docker Compose moderno).
 
 ```bash
-make setup
+make setup INSTALL_ARGS="--name='Seu nome' --email=voce@exemplo.com"
 make up
 ```
 
-Se uma execução anterior criou `node_modules` ou `public/build` com outro usuário e npm/Vite retornar `EACCES`, execute `make fix-permissions` e repita o comando.
+`make setup` exibe uma senha temporária uma única vez. Entre com o e-mail informado e altere essa senha no primeiro acesso. Sem `INSTALL_ARGS`, o instalador solicita nome e e-mail de forma interativa.
 
-Acesse `http://localhost:8000`. O Vite usa a porta `5173`.
+Acesse `http://localhost:8000`. O Vite usa a porta `5173` e o MySQL é exposto em `3307` para evitar conflito com instalações locais.
 
-O Vite publica os assets como `http://localhost:5173` e aceita requisições da origem definida em `VITE_APP_ORIGIN` (`http://localhost:8000` por padrão). Se você acessar a aplicação de outro computador, ajuste as duas variáveis para os endereços que esse navegador consegue alcançar antes de iniciar os containers.
+Se npm/Vite retornar `EACCES` em `node_modules` ou `public/build`, execute `make fix-permissions`. Para Docker Compose v2, acrescente `COMPOSE="docker compose"` aos comandos.
 
-Credenciais:
+Os alvos `make up` e `make debug` recriam somente os containers descartáveis `app` e `vite`, evitando o erro `KeyError: 'ContainerConfig'` do Compose 1.29. Dados e sessões permanecem no volume MySQL.
 
-```text
-demo@mycoins.local
-demo1234
-```
-
-Para Docker Compose moderno, acrescente `COMPOSE="docker compose"` aos comandos, por exemplo:
+Para gerar uma nova senha temporária e revogar sessões existentes:
 
 ```bash
-make setup COMPOSE="docker compose"
+docker-compose run --rm app php artisan mycoins:reset-password
 ```
 
-Os alvos `make up` e `make debug` removem e recriam somente os containers descartáveis `app` e `vite`. Isso evita o erro `KeyError: 'ContainerConfig'` do Docker Compose 1.29 com versões atuais do Docker. Os arquivos e dados de sessão permanecem nos diretórios montados do projeto. A atualização para Docker Compose v2 continua recomendada.
-
-## Debug local no VS Code
-
-Instale a extensão PHP Debug, abra a configuração **Listen for My Coins Xdebug** e execute:
+## Qualidade e debug
 
 ```bash
-make debug
-```
-
-O Xdebug conecta na porta `9003` e mapeia `/var/www/html` para a raiz deste projeto. No uso normal, `XDEBUG_MODE` fica desligado.
-
-## Qualidade
-
-```bash
-make test       # PHPUnit
-make e2e        # Playwright desktop/mobile + axe
-make build      # build de produção do Vite
+make test       # PHPUnit em my_coins_testing
+make e2e        # Playwright + axe em my_coins_e2e
+make build      # assets de produção do Vite
 make format     # Laravel Pint
+make debug      # stack com Xdebug na porta 9003
 ```
 
-Também é possível usar PHP 8.3, Composer e Node 22 diretamente no host: copie `.env.example` para `.env`, execute `composer install`, `php artisan key:generate`, `npm install`, `npm run build` e `php artisan serve`.
+No VS Code, use a configuração **Listen for My Coins Xdebug** antes de `make debug`. O servidor mapeia `/var/www/html` para a raiz do projeto.
 
-## Limites do protótipo
-
-Não há banco de dados ou autenticação de produção. Criar, editar, excluir e arquivar altera apenas a sessão atual. O botão **Restaurar dados** repõe os fixtures originais; logout também encerra a sessão.
+Para executar sem Docker, use PHP 8.3, Composer, MySQL 8 e Node 22. Copie `.env.example` para `.env`, ajuste a conexão e execute `composer install`, `php artisan key:generate`, `php artisan migrate`, `php artisan mycoins:install`, `npm install`, `npm run build` e `php artisan serve`.

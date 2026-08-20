@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Finance;
 
 use App\Http\Controllers\Controller;
-use App\Services\DemoFinanceStore;
+use App\Services\FinanceStore;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -11,7 +11,7 @@ use Illuminate\View\View;
 
 class CategoryController extends Controller
 {
-    public function index(DemoFinanceStore $store): View
+    public function index(FinanceStore $store): View
     {
         return view('categories.index', ['categories' => collect($store->all('categories'))->groupBy('type')]);
     }
@@ -21,19 +21,19 @@ class CategoryController extends Controller
         return view('categories.form', ['category' => null]);
     }
 
-    public function store(Request $request, DemoFinanceStore $store): RedirectResponse
+    public function store(Request $request, FinanceStore $store): RedirectResponse
     {
         $store->create('categories', $this->validated($request));
 
         return redirect()->route('categories.index')->with('success', 'Categoria adicionada com sucesso.');
     }
 
-    public function edit(int $category, DemoFinanceStore $store): View
+    public function edit(int $category, FinanceStore $store): View
     {
         return view('categories.form', ['category' => $store->find('categories', $category) ?? abort(404)]);
     }
 
-    public function update(Request $request, int $category, DemoFinanceStore $store): RedirectResponse
+    public function update(Request $request, int $category, FinanceStore $store): RedirectResponse
     {
         $existing = $store->find('categories', $category) ?? abort(404);
         $validated = $this->validated($request);
@@ -45,7 +45,7 @@ class CategoryController extends Controller
         return redirect()->route('categories.index')->with('success', 'Categoria atualizada com sucesso.');
     }
 
-    public function destroy(int $category, DemoFinanceStore $store): RedirectResponse
+    public function destroy(int $category, FinanceStore $store): RedirectResponse
     {
         abort_unless($store->find('categories', $category), 404);
         if ($store->categoryIsUsed($category)) {

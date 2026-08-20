@@ -2,13 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Models\Account;
+use App\Models\Transaction;
+use App\Models\User;
 use Tests\TestCase;
 
 class FinanceFlowTest extends TestCase
 {
     private function authenticated(): static
     {
-        return $this->withSession(['demo_authenticated' => true]);
+        return $this->signInWithFinanceData();
     }
 
     public function test_core_pages_render_in_portuguese(): void
@@ -30,6 +33,7 @@ class FinanceFlowTest extends TestCase
         $this->get('/transactions/11')->assertSee('Café atualizado');
         $this->delete('/transactions/11')->assertRedirect('/transactions');
         $this->get('/transactions/11')->assertNotFound();
+        $this->assertSoftDeleted('transactions', ['id' => 11, 'description' => 'Café atualizado']);
     }
 
     public function test_transaction_rejects_a_category_from_the_wrong_type(): void
@@ -60,10 +64,34 @@ class FinanceFlowTest extends TestCase
         $this->get('/transactions/create')->assertDontSee('Conta principal · Banco Aurora');
     }
 
-    public function test_demo_reset_discards_session_mutations(): void
+    public function test_financial_data_persists_after_logout_and_login(): void
     {
-        $this->authenticated()->delete('/transactions/1');
-        $this->post('/demo/reset')->assertRedirect('/dashboard');
-        $this->get('/transactions/1')->assertOk()->assertSee('Salário mensal');
+        $this->authenticated()->post('/transactions', [
+            'description' => 'Registro persistente', 'type' => 'expense', 'amount' => '10,00',
+            'date' => now()->format('Y-m-d'), 'account_id' => 1, 'category_id' => 4,
+        ]);
+        $this->post('/logout')->assertRedirect('/login');
+        $this->post('/login', ['email' => 'owner@mycoins.local', 'password' => 'Password!234'])->assertRedirect('/dashboard');
+        $this->get('/transactions?search=Registro%20persistente')->assertSee('Registro persistente');
+    }
+
+    public function test_owner_cannot_read_or_reference_another_users_account(): void
+    {
+        $this->authenticated();
+        $otherUser = User::factory()->create(['email' => 'other@example.com']);
+        $otherAccount = Account::create([
+            'user_id' => $otherUser->id,
+            'name' => 'Conta de outra pessoa',
+            'type' => 'checking',
+            'color' => '#111827',
+            'opening_balance' => 10000,
+        ]);
+
+        $this->get("/accounts/{$otherAccount->id}")->assertNotFound();
+        $this->post('/transactions', [
+            'description' => 'Tentativa indevida', 'type' => 'expense', 'amount' => '10,00',
+            'date' => now()->format('Y-m-d'), 'account_id' => $otherAccount->id, 'category_id' => 4,
+        ])->assertSessionHasErrors('account_id');
+        $this->assertFalse(Transaction::query()->where('description', 'Tentativa indevida')->exists());
     }
 }

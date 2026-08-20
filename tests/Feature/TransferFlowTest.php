@@ -2,19 +2,19 @@
 
 namespace Tests\Feature;
 
-use App\Services\DemoFinanceStore;
+use App\Services\FinanceStore;
 use Tests\TestCase;
 
 class TransferFlowTest extends TestCase
 {
     private function authenticated(): static
     {
-        return $this->withSession(['demo_authenticated' => true]);
+        return $this->signInWithFinanceData();
     }
 
-    private function store(): DemoFinanceStore
+    private function store(): FinanceStore
     {
-        return $this->app->make(DemoFinanceStore::class);
+        return $this->app->make(FinanceStore::class);
     }
 
     private function payload(array $overrides = []): array

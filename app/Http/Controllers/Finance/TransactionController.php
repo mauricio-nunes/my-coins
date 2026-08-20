@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Finance;
 
 use App\Http\Controllers\Controller;
-use App\Services\DemoFinanceStore;
+use App\Services\FinanceStore;
 use App\Support\Money;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,7 +13,7 @@ use Illuminate\View\View;
 
 class TransactionController extends Controller
 {
-    public function index(Request $request, DemoFinanceStore $store): View
+    public function index(Request $request, FinanceStore $store): View
     {
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:120'],
@@ -35,26 +35,26 @@ class TransactionController extends Controller
         return view('transactions.index', $this->formData($store, true) + compact('transactions', 'filters'));
     }
 
-    public function create(DemoFinanceStore $store): View
+    public function create(FinanceStore $store): View
     {
         return view('transactions.form', $this->formData($store) + ['transaction' => null]);
     }
 
-    public function store(Request $request, DemoFinanceStore $store): RedirectResponse
+    public function store(Request $request, FinanceStore $store): RedirectResponse
     {
         $transaction = $store->create('transactions', $this->validated($request, $store));
 
         return redirect()->route('transactions.show', $transaction['id'])->with('success', 'Transação adicionada com sucesso.');
     }
 
-    public function show(int $transaction, DemoFinanceStore $store): View
+    public function show(int $transaction, FinanceStore $store): View
     {
         $item = $store->find('transactions', $transaction) ?? abort(404);
 
         return view('transactions.show', $this->formData($store, true) + ['transaction' => $item]);
     }
 
-    public function edit(int $transaction, DemoFinanceStore $store): View|RedirectResponse
+    public function edit(int $transaction, FinanceStore $store): View|RedirectResponse
     {
         $item = $store->find('transactions', $transaction) ?? abort(404);
         if ($item['type'] === 'transfer') {
@@ -64,7 +64,7 @@ class TransactionController extends Controller
         return view('transactions.form', $this->formData($store) + ['transaction' => $item]);
     }
 
-    public function update(Request $request, int $transaction, DemoFinanceStore $store): RedirectResponse
+    public function update(Request $request, int $transaction, FinanceStore $store): RedirectResponse
     {
         $existing = $store->find('transactions', $transaction) ?? abort(404);
         abort_if($existing['type'] === 'transfer', 404);
@@ -73,14 +73,14 @@ class TransactionController extends Controller
         return redirect()->route('transactions.show', $transaction)->with('success', 'Transação atualizada com sucesso.');
     }
 
-    public function destroy(int $transaction, DemoFinanceStore $store): RedirectResponse
+    public function destroy(int $transaction, FinanceStore $store): RedirectResponse
     {
         abort_unless($store->delete('transactions', $transaction), 404);
 
-        return redirect()->route('transactions.index')->with('success', 'Transação excluída da sessão.');
+        return redirect()->route('transactions.index')->with('success', 'Transação excluída. O registro foi preservado para auditoria.');
     }
 
-    private function validated(Request $request, DemoFinanceStore $store): array
+    private function validated(Request $request, FinanceStore $store): array
     {
         $validated = $request->validate([
             'description' => ['required', 'string', 'max:120'],
@@ -120,7 +120,7 @@ class TransactionController extends Controller
         return $validated;
     }
 
-    private function formData(DemoFinanceStore $store, bool $includeArchived = false): array
+    private function formData(FinanceStore $store, bool $includeArchived = false): array
     {
         return [
             'accounts' => collect($store->all('accounts'))->when(

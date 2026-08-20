@@ -20,7 +20,7 @@
 @section('title', $editing ? 'Editar transação' : 'Nova transação')
 @section('eyebrow', 'TRANSAÇÕES')
 @section('page_title', $editing ? 'Editar transação' : 'Nova transação')
-@section('page_subtitle', 'Preencha os dados da movimentação. Os valores ficam apenas nesta sessão.')
+@section('page_subtitle', 'Preencha os dados da movimentação financeira.')
 @section('page_actions')<a href="{{ route('transactions.index') }}" class="btn btn-outline-secondary">Cancelar</a>@endsection
 
 @section('page_content')

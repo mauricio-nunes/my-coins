@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Finance;
 
 use App\Http\Controllers\Controller;
-use App\Services\DemoFinanceStore;
+use App\Services\FinanceStore;
 use App\Services\OfxParser;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,12 +18,12 @@ class OfxImportController extends Controller
 
     private const RESULT_KEY = 'my_coins.ofx_import_result';
 
-    public function create(DemoFinanceStore $store): View
+    public function create(FinanceStore $store): View
     {
         return view('imports.create', $this->formData($store));
     }
 
-    public function preview(Request $request, DemoFinanceStore $store, OfxParser $parser): RedirectResponse
+    public function preview(Request $request, FinanceStore $store, OfxParser $parser): RedirectResponse
     {
         $validated = $request->validate([
             'ofx_file' => ['required', 'file', 'max:2048'],
@@ -69,7 +69,7 @@ class OfxImportController extends Controller
         return redirect()->route('imports.review');
     }
 
-    public function review(Request $request, DemoFinanceStore $store): View|RedirectResponse
+    public function review(Request $request, FinanceStore $store): View|RedirectResponse
     {
         $draft = $request->session()->get(self::DRAFT_KEY);
         if (! is_array($draft)) {
@@ -91,7 +91,7 @@ class OfxImportController extends Controller
         ]);
     }
 
-    public function store(Request $request, DemoFinanceStore $store): RedirectResponse
+    public function store(Request $request, FinanceStore $store): RedirectResponse
     {
         $draft = $request->session()->get(self::DRAFT_KEY);
         if (! is_array($draft)) {
@@ -220,7 +220,7 @@ class OfxImportController extends Controller
         return view('imports.result', ['result' => $result]);
     }
 
-    private function formData(DemoFinanceStore $store): array
+    private function formData(FinanceStore $store): array
     {
         return [
             'accounts' => collect($store->all('accounts'))->where('archived', false)->values(),

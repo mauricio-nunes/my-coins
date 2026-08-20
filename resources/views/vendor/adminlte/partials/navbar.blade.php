@@ -6,20 +6,10 @@
                     <i class="bi bi-list" aria-hidden="true"></i>
                 </a>
             </li>
-            <li class="nav-item d-none d-md-flex align-items-center text-body-secondary small ms-2">
-                <i class="bi bi-shield-check me-2 text-success" aria-hidden="true"></i> Ambiente de demonstração
-            </li>
+            <li class="nav-item d-none d-md-flex align-items-center text-body-secondary small ms-2"><i class="bi bi-shield-check me-2 text-success" aria-hidden="true"></i> Ambiente protegido</li>
         </ul>
 
         <ul class="navbar-nav ms-auto">
-            <li class="nav-item">
-                <form action="{{ route('demo.reset') }}" method="post" data-confirm="Restaurar todos os dados da demonstração?">
-                    @csrf
-                    <button class="nav-link border-0 bg-transparent" type="submit" title="Restaurar dados" aria-label="Restaurar dados">
-                        <i class="bi bi-arrow-counterclockwise me-sm-1" aria-hidden="true"></i><span class="d-none d-sm-inline">Restaurar dados</span>
-                    </button>
-                </form>
-            </li>
             <li class="nav-item">
                 <a class="nav-link" href="#" data-lte-toggle="fullscreen" aria-label="Alternar tela cheia">
                     <i data-lte-icon="maximize" class="bi bi-arrows-fullscreen" aria-hidden="true"></i>
@@ -32,10 +22,11 @@
             <li class="nav-item dropdown user-menu">
                 <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Abrir menu do usuário">
                     <span class="user-avatar"><i class="bi bi-person" aria-hidden="true"></i></span>
-                    <span class="d-none d-md-inline">Maurício</span>
+                    <span class="d-none d-md-inline">{{ auth()->user()->name }}</span>
                 </a>
                 <ul class="dropdown-menu dropdown-menu-end">
-                    <li><span class="dropdown-item-text small text-body-secondary">demo@mycoins.local</span></li>
+                    <li><span class="dropdown-item-text small text-body-secondary">{{ auth()->user()->email }}</span></li>
+                    <li><a class="dropdown-item" href="{{ route('password.edit') }}"><i class="bi bi-key me-2"></i>Alterar senha</a></li>
                     <li><hr class="dropdown-divider"></li>
                     <li>
                         <form action="{{ route('logout') }}" method="post">@csrf

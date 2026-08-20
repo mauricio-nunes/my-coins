@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Finance;
 
 use App\Http\Controllers\Controller;
-use App\Services\DemoFinanceStore;
+use App\Services\FinanceStore;
 use App\Support\Money;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -12,7 +12,7 @@ use Illuminate\View\View;
 
 class BudgetController extends Controller
 {
-    public function index(Request $request, DemoFinanceStore $store): View
+    public function index(Request $request, FinanceStore $store): View
     {
         $month = $request->string('month', now()->format('Y-m'))->toString();
         $categories = collect($store->all('categories'))->keyBy('id');
@@ -24,12 +24,12 @@ class BudgetController extends Controller
         return view('budgets.index', compact('budgets', 'categories', 'month'));
     }
 
-    public function create(DemoFinanceStore $store): View
+    public function create(FinanceStore $store): View
     {
         return view('budgets.form', ['budget' => null, 'categories' => collect($store->all('categories'))->where('type', 'expense')]);
     }
 
-    public function store(Request $request, DemoFinanceStore $store): RedirectResponse
+    public function store(Request $request, FinanceStore $store): RedirectResponse
     {
         $validated = $this->validated($request, $store);
         $store->create('budgets', $validated);
@@ -37,7 +37,7 @@ class BudgetController extends Controller
         return redirect()->route('budgets.index', ['month' => $validated['month']])->with('success', 'Orçamento criado com sucesso.');
     }
 
-    public function edit(int $budget, DemoFinanceStore $store): View
+    public function edit(int $budget, FinanceStore $store): View
     {
         return view('budgets.form', [
             'budget' => $store->find('budgets', $budget) ?? abort(404),
@@ -45,7 +45,7 @@ class BudgetController extends Controller
         ]);
     }
 
-    public function update(Request $request, int $budget, DemoFinanceStore $store): RedirectResponse
+    public function update(Request $request, int $budget, FinanceStore $store): RedirectResponse
     {
         abort_unless($store->find('budgets', $budget), 404);
         $validated = $this->validated($request, $store, $budget);
@@ -54,14 +54,14 @@ class BudgetController extends Controller
         return redirect()->route('budgets.index', ['month' => $validated['month']])->with('success', 'Orçamento atualizado.');
     }
 
-    public function destroy(int $budget, DemoFinanceStore $store): RedirectResponse
+    public function destroy(int $budget, FinanceStore $store): RedirectResponse
     {
         abort_unless($store->delete('budgets', $budget), 404);
 
         return back()->with('success', 'Orçamento excluído.');
     }
 
-    private function validated(Request $request, DemoFinanceStore $store, ?int $ignore = null): array
+    private function validated(Request $request, FinanceStore $store, ?int $ignore = null): array
     {
         $validated = $request->validate([
             'category_id' => ['required', 'integer'],

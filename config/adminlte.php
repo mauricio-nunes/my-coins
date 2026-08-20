@@ -32,7 +32,7 @@ return [
     'sidebar_scrollbar_auto_hide' => 'leave',
 
     'footer_left' => 'My Coins · Protótipo de finanças pessoais',
-    'footer_right' => 'Dados mantidos somente nesta sessão',
+    'footer_right' => 'Seus dados financeiros, sob seu controle',
     'preloader' => false,
     'control_sidebar' => false,
     'sidebar_docs_url' => false,

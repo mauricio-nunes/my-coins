@@ -2,13 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Models\Tag;
+use App\Models\Transaction;
 use Tests\TestCase;
 
 class TagFlowTest extends TestCase
 {
     private function authenticated(): static
     {
-        return $this->withSession(['demo_authenticated' => true]);
+        return $this->signInWithFinanceData();
     }
 
     private function transactionPayload(array $overrides = []): array
@@ -30,11 +32,10 @@ class TagFlowTest extends TestCase
             'tags' => ['Essencial', ' Viagem ', 'viagem'],
         ]))->assertRedirect('/transactions/11');
 
-        $data = session('my_coins.demo_data');
-        $transaction = collect($data['transactions'])->firstWhere('id', 11);
+        $transaction = Transaction::with('tags')->findOrFail(11);
 
-        $this->assertCount(4, $data['tags']);
-        $this->assertSame([1, 4], $transaction['tag_ids']);
+        $this->assertCount(4, Tag::all());
+        $this->assertSame([1, 4], $transaction->tags->pluck('id')->all());
         $this->get('/transactions/11')->assertOk()->assertSee('#Essencial')->assertSee('#Viagem');
     }
 
@@ -65,7 +66,7 @@ class TagFlowTest extends TestCase
         $this->authenticated()->post('/tags', ['name' => '  Casa   nova  '])
             ->assertRedirect('/tags');
 
-        $this->assertSame('Casa nova', session('my_coins.demo_data.tags.3.name'));
+        $this->assertSame('Casa nova', Tag::findOrFail(4)->name);
 
         $this->put('/tags/1', ['name' => 'Prioridade'])->assertRedirect('/tags');
         $this->get('/transactions/1')->assertSee('#Prioridade');
@@ -90,8 +91,8 @@ class TagFlowTest extends TestCase
             'category_id' => 1,
         ]))->assertRedirect('/transactions/1');
 
-        $transaction = collect(session('my_coins.demo_data.transactions'))->firstWhere('id', 1);
-        $this->assertSame([], $transaction['tag_ids']);
+        $transaction = Transaction::findOrFail(1);
+        $this->assertSame([], $transaction->tags()->pluck('tags.id')->all());
         $this->get('/transactions/1')->assertSee('Nenhuma tag');
     }
 
@@ -109,12 +110,9 @@ class TagFlowTest extends TestCase
     {
         $this->authenticated()->delete('/tags/1')->assertRedirect('/tags');
 
-        $data = session('my_coins.demo_data');
-        $this->assertCount(10, $data['transactions']);
-        $this->assertFalse(collect($data['tags'])->contains('id', 1));
-        $this->assertFalse(collect($data['transactions'])->contains(
-            fn (array $transaction): bool => in_array(1, $transaction['tag_ids'], true),
-        ));
+        $this->assertCount(10, Transaction::all());
+        $this->assertSoftDeleted('tags', ['id' => 1]);
+        $this->assertDatabaseMissing('tag_transaction', ['tag_id' => 1]);
     }
 
     public function test_transaction_rejects_more_than_ten_tags(): void
@@ -123,23 +121,5 @@ class TagFlowTest extends TestCase
 
         $this->authenticated()->post('/transactions', $this->transactionPayload(['tags' => $tags]))
             ->assertSessionHasErrors('tags');
-    }
-
-    public function test_existing_session_data_without_tag_fields_is_upgraded(): void
-    {
-        $this->authenticated()->get('/dashboard');
-        $data = session('my_coins.demo_data');
-        unset($data['tags']);
-        foreach ($data['transactions'] as &$transaction) {
-            unset($transaction['tag_ids']);
-        }
-        unset($transaction);
-        session()->put('my_coins.demo_data', $data);
-
-        $this->get('/transactions')->assertOk();
-        $this->assertSame([], session('my_coins.demo_data.tags'));
-        $this->assertTrue(collect(session('my_coins.demo_data.transactions'))->every(
-            fn (array $transaction): bool => $transaction['tag_ids'] === [],
-        ));
     }
 }

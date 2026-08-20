@@ -3,13 +3,13 @@
 namespace App\Http\Controllers\Finance;
 
 use App\Http\Controllers\Controller;
-use App\Services\DemoFinanceStore;
+use App\Services\FinanceStore;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class ReportController extends Controller
 {
-    public function __invoke(Request $request, DemoFinanceStore $store): View
+    public function __invoke(Request $request, FinanceStore $store): View
     {
         $filters = $request->validate([
             'from' => ['nullable', 'date'],

@@ -3,13 +3,13 @@
 namespace App\Http\Controllers\Finance;
 
 use App\Http\Controllers\Controller;
-use App\Services\DemoFinanceStore;
+use App\Services\FinanceStore;
 use Carbon\Carbon;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
-    public function __invoke(DemoFinanceStore $store): View
+    public function __invoke(FinanceStore $store): View
     {
         $summary = $store->dashboard();
         $accounts = collect($store->all('accounts'))->where('archived', false)->map(

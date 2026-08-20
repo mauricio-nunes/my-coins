@@ -3,11 +3,13 @@ import { expect, test } from '@playwright/test'
 
 async function login(page) {
   await page.goto('/login')
+  await page.getByLabel('E-mail').fill('owner@mycoins.local')
+  await page.getByLabel('Senha').fill('Password!234')
   await page.getByRole('button', { name: /Entrar no My Coins/i }).click()
   await expect(page).toHaveURL(/dashboard/)
 }
 
-const importOfx = `OFXHEADER:100
+const importOfx = suffix => `OFXHEADER:100
 DATA:OFXSGML
 VERSION:102
 SECURITY:NONE
@@ -21,38 +23,40 @@ CHARSET:1252
 <TRNTYPE>CREDIT
 <DTPOSTED>20260803000000[-03:EST]
 <TRNAMT>1250.50
-<FITID>PLAYWRIGHT-CREDIT-001
+<FITID>PLAYWRIGHT-CREDIT-${suffix}
 <MEMO>Pagamento importado
 </STMTTRN>
 <STMTTRN>
 <TRNTYPE>DEBIT
 <DTPOSTED>20260804000000[-03:EST]
 <TRNAMT>-300.00
-<FITID>PLAYWRIGHT-DEBIT-001
+<FITID>PLAYWRIGHT-DEBIT-${suffix}
 <MEMO>Registro ignorado
 </STMTTRN>
 </BANKTRANLIST>
 </OFX>`
 
-test('login, navigation, transaction flow and reset are usable', async ({ page }) => {
+test('login, navigation and persisted transaction flow are usable', async ({ page }, testInfo) => {
+  const description = `Café com amigos ${testInfo.project.name}`
   await login(page)
   await expect(page.getByRole('heading', { name: /Sua vida financeira/i })).toBeVisible()
   await page.getByRole('link', { name: /Nova transação/i }).click()
-  await page.getByLabel('Descrição').fill('Café com amigos')
+  await page.getByLabel('Descrição').fill(description)
   await page.getByLabel('Valor').fill('25,90')
   await page.getByLabel('Conta').selectOption('1')
   await page.getByLabel('Categoria').selectOption('6')
   await page.getByRole('button', { name: /Adicionar transação/i }).click()
-  await expect(page.getByRole('heading', { name: 'Café com amigos' })).toBeVisible()
-  await page.goto('/transactions?search=Café')
-  await expect(page.getByText('Café com amigos')).toBeVisible()
-  page.on('dialog', dialog => dialog.accept())
-  await page.goto('/dashboard')
-  await page.getByRole('button', { name: /Restaurar dados/i }).click()
-  await expect(page.getByText(/dados de demonstração foram restaurados/i)).toBeVisible()
+  await expect(page.getByRole('heading', { name: description })).toBeVisible()
+  await page.getByRole('link', { name: /Abrir menu do usuário/i }).click()
+  await page.getByRole('button', { name: /Sair/i }).click()
+  await login(page)
+  await page.goto(`/transactions?search=${encodeURIComponent(description)}`)
+  await expect(page.getByText(description)).toBeVisible()
 })
 
-test('tags can be created inline, filtered and managed', async ({ page }) => {
+test('tags can be created inline, filtered and managed', async ({ page }, testInfo) => {
+  const tagName = `Aprendizado ${testInfo.project.name.replace('-chromium', '')}`
+  const renamedTag = `Estudos ${testInfo.project.name.replace('-chromium', '')}`
   await login(page)
   await page.goto('/transactions/create')
   await page.getByLabel('Descrição').fill('Curso de finanças')
@@ -60,24 +64,24 @@ test('tags can be created inline, filtered and managed', async ({ page }) => {
   await page.getByLabel('Conta').selectOption('1')
   await page.getByLabel('Categoria').selectOption('6')
   const tagInput = page.locator('.ts-control input').first()
-  await tagInput.fill('Aprendizado')
+  await tagInput.fill(tagName)
   await page.locator('.ts-dropdown .create').click()
   await page.getByRole('button', { name: /Adicionar transação/i }).click()
-  await expect(page.getByText('#Aprendizado')).toBeVisible()
+  await expect(page.getByText(`#${tagName}`)).toBeVisible()
 
   await page.goto('/transactions')
   const filterInput = page.locator('.ts-control input').first()
-  await filterInput.fill('Aprendizado')
-  await page.locator('.ts-dropdown').getByRole('option', { name: 'Aprendizado' }).click()
+  await filterInput.fill(tagName)
+  await page.locator('.ts-dropdown').getByRole('option', { name: tagName }).click()
   await page.getByRole('button', { name: /Aplicar filtros/i }).click()
   await expect(page.getByText('Curso de finanças')).toBeVisible()
 
   await page.goto('/tags')
-  const tagRow = page.getByRole('row').filter({ hasText: '#Aprendizado' })
-  await tagRow.getByRole('link', { name: /Renomear Aprendizado/i }).click()
-  await page.getByLabel('Nome').fill('Estudos')
+  const tagRow = page.getByRole('row').filter({ hasText: `#${tagName}` })
+  await tagRow.getByRole('link', { name: new RegExp(`Renomear ${tagName}`, 'i') }).click()
+  await page.getByLabel('Nome').fill(renamedTag)
   await page.getByRole('button', { name: /Salvar alterações/i }).click()
-  await expect(page.getByText('#Estudos')).toBeVisible()
+  await expect(page.getByText(`#${renamedTag}`)).toBeVisible()
 })
 
 test('transfer menu opens the dedicated linked-account flow', async ({ page }) => {
@@ -103,20 +107,22 @@ test('transfer menu opens the dedicated linked-account flow', async ({ page }) =
   await expect(page.getByRole('heading', { name: 'Reserva de férias' })).toBeVisible()
 })
 
-test('OFX wizard uploads, classifies and imports transactions', async ({ page }) => {
+test('OFX wizard uploads, classifies and imports transactions', async ({ page }, testInfo) => {
+  const suffix = testInfo.project.name.toUpperCase()
+  const label = `Importação ${testInfo.project.name.replace('-chromium', '')}`
   await login(page)
   await page.goto('/transactions/import')
   await page.getByLabel('Conta').selectOption('1')
   const labelInput = page.locator('.ts-control input').first()
-  await labelInput.fill('Importação Playwright')
+  await labelInput.fill(label)
   await page.locator('.ts-dropdown .create').click()
-  await expect(page.locator('#label')).toHaveValue('Importação Playwright')
+  await expect(page.locator('#label')).toHaveValue(label)
   await labelInput.press('Escape')
   const fileInput = page.getByLabel('Arquivo OFX')
   await fileInput.setInputFiles({
     name: 'agosto.ofx',
     mimeType: 'application/x-ofx',
-    buffer: Buffer.from(importOfx),
+    buffer: Buffer.from(importOfx(suffix)),
   })
   expect(await page.locator('form[action$="/preview"]').evaluate(form => form.checkValidity())).toBe(true)
   await Promise.all([
@@ -135,7 +141,7 @@ test('OFX wizard uploads, classifies and imports transactions', async ({ page })
   await page.locator('form[data-import-review]').evaluate(form => form.submit())
 
   await expect(page.getByRole('heading', { name: 'Importação concluída' })).toBeVisible()
-  await expect(page.getByText('#Importação Playwright')).toBeVisible()
+  await expect(page.getByText(`#${label}`)).toBeVisible()
   await page.getByRole('link', { name: 'Ver transações importadas' }).click()
   await expect(page.getByText('Pagamento importado')).toBeVisible()
 })
