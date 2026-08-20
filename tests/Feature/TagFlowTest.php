@@ -21,7 +21,7 @@ class TagFlowTest extends TestCase
             'amount' => '350,00',
             'date' => now()->format('Y-m-d'),
             'account_id' => 1,
-            'category_id' => 6,
+            'category_id' => $this->categoryId('Lazer e compras'),
             'notes' => '',
         ], $overrides);
     }
@@ -88,7 +88,7 @@ class TagFlowTest extends TestCase
             'type' => 'income',
             'amount' => '7800,00',
             'account_id' => 1,
-            'category_id' => 1,
+            'category_id' => $this->categoryId('Trabalho'),
         ]))->assertRedirect('/transactions/1');
 
         $transaction = Transaction::findOrFail(1);

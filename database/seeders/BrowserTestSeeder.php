@@ -8,6 +8,7 @@ use App\Models\Category;
 use App\Models\Tag;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Support\DefaultCategories;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Seeder;
 
@@ -33,15 +34,8 @@ class BrowserTestSeeder extends Seeder
             ['name' => 'Reserva', 'institution' => 'Banco Horizonte', 'type' => 'savings', 'color' => '#2563eb', 'opening_balance' => 1850000],
             ['name' => 'Carteira', 'institution' => 'Dinheiro', 'type' => 'cash', 'color' => '#d97706', 'opening_balance' => 18000],
         ])->map(fn (array $attributes): Account => Account::create($attributes + ['user_id' => $user->id]));
-        $categories = collect([
-            ['name' => 'Salário', 'type' => 'income', 'icon' => 'bi-briefcase', 'color' => '#16a34a'],
-            ['name' => 'Freelance', 'type' => 'income', 'icon' => 'bi-laptop', 'color' => '#0891b2'],
-            ['name' => 'Moradia', 'type' => 'expense', 'icon' => 'bi-house', 'color' => '#7c3aed'],
-            ['name' => 'Alimentação', 'type' => 'expense', 'icon' => 'bi-basket', 'color' => '#ea580c'],
-            ['name' => 'Transporte', 'type' => 'expense', 'icon' => 'bi-car-front', 'color' => '#2563eb'],
-            ['name' => 'Lazer', 'type' => 'expense', 'icon' => 'bi-controller', 'color' => '#db2777'],
-            ['name' => 'Saúde', 'type' => 'expense', 'icon' => 'bi-heart-pulse', 'color' => '#dc2626'],
-        ])->map(fn (array $attributes): Category => Category::create($attributes + ['user_id' => $user->id]));
+        DefaultCategories::createFor($user);
+        $categories = Category::query()->where('user_id', $user->id)->get()->keyBy('name');
         $tags = collect(['Essencial', 'Trabalho', 'Fim de semana'])->map(fn (string $name): Tag => Tag::create([
             'user_id' => $user->id,
             'name' => $name,
@@ -49,13 +43,13 @@ class BrowserTestSeeder extends Seeder
         ]));
         $today = CarbonImmutable::today();
         $rows = [
-            ['Salário mensal', 'income', 780000, $today->subDays(12), 0, 0, 0],
-            ['Aluguel', 'expense', 235000, $today->subDays(10), 0, 2, 0],
-            ['Supermercado Vila', 'expense', 48670, $today->subDays(7), 0, 3, 0],
-            ['Projeto freelance', 'income', 160000, $today->subDays(6), 1, 1, 1],
-            ['Combustível', 'expense', 21000, $today->subDays(4), 0, 4, null],
-            ['Cinema', 'expense', 9200, $today->subDays(2), 2, 5, 2],
-            ['Farmácia', 'expense', 13780, $today->subDay(), 0, 6, 0],
+            ['Salário mensal', 'income', 780000, $today->subDays(12), 0, 'Trabalho', 0],
+            ['Aluguel', 'expense', 235000, $today->subDays(10), 0, 'Moradia', 0],
+            ['Supermercado Vila', 'expense', 48670, $today->subDays(7), 0, 'Alimentação', 0],
+            ['Projeto freelance', 'income', 160000, $today->subDays(6), 1, 'Trabalho', 1],
+            ['Combustível', 'expense', 21000, $today->subDays(4), 0, 'Transporte', null],
+            ['Cinema', 'expense', 9200, $today->subDays(2), 2, 'Lazer e compras', 2],
+            ['Farmácia', 'expense', 13780, $today->subDay(), 0, 'Saúde e cuidados pessoais', 0],
         ];
         foreach ($rows as [$description, $type, $amount, $date, $account, $category, $tag]) {
             $transaction = Transaction::create([
@@ -80,7 +74,7 @@ class BrowserTestSeeder extends Seeder
             'source_account_id' => $accounts[0]->id,
             'destination_account_id' => $accounts[1]->id,
         ]);
-        foreach ([[2, 250000], [3, 90000], [4, 45000], [5, 35000]] as [$category, $limit]) {
+        foreach ([['Moradia', 250000], ['Alimentação', 90000], ['Transporte', 45000], ['Lazer e compras', 35000]] as [$category, $limit]) {
             Budget::create([
                 'user_id' => $user->id,
                 'category_id' => $categories[$category]->id,

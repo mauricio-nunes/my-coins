@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Finance;
 
 use App\Http\Controllers\Controller;
 use App\Services\FinanceStore;
+use App\Support\DefaultCategories;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -18,7 +19,7 @@ class CategoryController extends Controller
 
     public function create(): View
     {
-        return view('categories.form', ['category' => null]);
+        return view('categories.form', ['category' => null, 'icons' => DefaultCategories::iconOptions()]);
     }
 
     public function store(Request $request, FinanceStore $store): RedirectResponse
@@ -30,7 +31,10 @@ class CategoryController extends Controller
 
     public function edit(int $category, FinanceStore $store): View
     {
-        return view('categories.form', ['category' => $store->find('categories', $category) ?? abort(404)]);
+        return view('categories.form', [
+            'category' => $store->find('categories', $category) ?? abort(404),
+            'icons' => DefaultCategories::iconOptions(),
+        ]);
     }
 
     public function update(Request $request, int $category, FinanceStore $store): RedirectResponse

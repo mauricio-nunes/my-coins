@@ -69,8 +69,8 @@ class TransferFlowTest extends TestCase
             'account_id' => 1, 'notes' => '',
         ];
 
-        $this->post('/transactions', $base + ['description' => 'Receita futura', 'type' => 'income', 'category_id' => 1]);
-        $this->post('/transactions', $base + ['description' => 'Despesa futura', 'type' => 'expense', 'category_id' => 4]);
+        $this->post('/transactions', $base + ['description' => 'Receita futura', 'type' => 'income', 'category_id' => $this->categoryId('Trabalho')]);
+        $this->post('/transactions', $base + ['description' => 'Despesa futura', 'type' => 'expense', 'category_id' => $this->categoryId('Alimentação')]);
 
         $this->assertSame($before, $this->store()->balance(1));
     }

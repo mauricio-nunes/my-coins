@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Category;
 use App\Models\User;
+use App\Support\DefaultCategories;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
@@ -41,7 +42,12 @@ class DemoAuthTest extends TestCase
         $owner = User::firstOrFail();
         $this->assertTrue($owner->must_change_password);
         $this->assertSame('Proprietário', $owner->name);
-        $this->assertCount(7, Category::all());
+        $this->assertCount(17, Category::all());
+        $this->assertSame(11, Category::where('type', 'expense')->count());
+        $this->assertSame(6, Category::where('type', 'income')->count());
+        foreach (DefaultCategories::definitions() as $category) {
+            $this->assertDatabaseHas('categories', $category + ['user_id' => $owner->id]);
+        }
 
         $this->artisan('mycoins:install', ['--name' => 'Outro', '--email' => 'other@example.com'])
             ->expectsOutputToContain('já possui um proprietário')

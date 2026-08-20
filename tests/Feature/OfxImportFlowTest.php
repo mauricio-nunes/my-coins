@@ -29,7 +29,7 @@ class OfxImportFlowTest extends TestCase
         $this->post('/transactions/import', [
             'draft_token' => $draft['token'],
             'rows' => [
-                0 => ['category_id' => 1],
+                0 => ['category_id' => $this->categoryId('Trabalho')],
                 1 => ['is_transfer' => 1, 'destination_account_id' => 2],
             ],
         ])->assertRedirect('/transactions/import/result');
@@ -61,7 +61,7 @@ class OfxImportFlowTest extends TestCase
         $draft = session('my_coins.ofx_import_draft');
         $this->post('/transactions/import', [
             'draft_token' => $draft['token'],
-            'rows' => [0 => ['category_id' => 1], 1 => ['ignore' => 1]],
+            'rows' => [0 => ['category_id' => $this->categoryId('Trabalho')], 1 => ['ignore' => 1]],
         ]);
 
         $this->uploadDraft();
@@ -86,7 +86,7 @@ class OfxImportFlowTest extends TestCase
         $draft = session('my_coins.ofx_import_draft');
         $this->post('/transactions/import', [
             'draft_token' => $draft['token'],
-            'rows' => [0 => ['category_id' => 1], 1 => ['ignore' => 1]],
+            'rows' => [0 => ['category_id' => $this->categoryId('Trabalho')], 1 => ['ignore' => 1]],
         ]);
         $transaction = Transaction::where('ofx_fitid', 'CREDIT-001')->firstOrFail();
         $this->delete("/transactions/{$transaction->id}")->assertRedirect('/transactions');
@@ -96,7 +96,7 @@ class OfxImportFlowTest extends TestCase
         $this->assertFalse($newDraft['rows'][0]['duplicate']);
         $this->post('/transactions/import', [
             'draft_token' => $newDraft['token'],
-            'rows' => [0 => ['category_id' => 1], 1 => ['ignore' => 1]],
+            'rows' => [0 => ['category_id' => $this->categoryId('Trabalho')], 1 => ['ignore' => 1]],
         ])->assertRedirect('/transactions/import/result');
 
         $this->assertSame(1, Transaction::where('ofx_fitid', 'CREDIT-001')->count());
@@ -111,7 +111,7 @@ class OfxImportFlowTest extends TestCase
         $this->post('/transactions/import', [
             'draft_token' => $draft['token'],
             'rows' => [
-                0 => ['category_id' => 3],
+                0 => ['category_id' => $this->categoryId('Moradia')],
                 1 => ['is_transfer' => 1, 'destination_account_id' => 1],
             ],
         ])->assertSessionHasErrors(['rows.0.category_id', 'rows.1.destination_account_id']);

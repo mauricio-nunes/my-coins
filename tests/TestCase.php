@@ -8,6 +8,7 @@ use App\Models\Category;
 use App\Models\Tag;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Support\DefaultCategories;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
@@ -43,31 +44,21 @@ abstract class TestCase extends BaseTestCase
         foreach ($accounts as $account) {
             Account::create($account + ['user_id' => $user->id, 'archived' => false]);
         }
-        $categories = [
-            ['name' => 'Salário', 'type' => 'income', 'icon' => 'bi-briefcase', 'color' => '#16a34a'],
-            ['name' => 'Freelance', 'type' => 'income', 'icon' => 'bi-laptop', 'color' => '#0891b2'],
-            ['name' => 'Moradia', 'type' => 'expense', 'icon' => 'bi-house', 'color' => '#7c3aed'],
-            ['name' => 'Alimentação', 'type' => 'expense', 'icon' => 'bi-basket', 'color' => '#ea580c'],
-            ['name' => 'Transporte', 'type' => 'expense', 'icon' => 'bi-car-front', 'color' => '#2563eb'],
-            ['name' => 'Lazer', 'type' => 'expense', 'icon' => 'bi-controller', 'color' => '#db2777'],
-            ['name' => 'Saúde', 'type' => 'expense', 'icon' => 'bi-heart-pulse', 'color' => '#dc2626'],
-        ];
-        foreach ($categories as $category) {
-            Category::create($category + ['user_id' => $user->id]);
-        }
+        DefaultCategories::createFor($user);
+        $categoryIds = Category::query()->where('user_id', $user->id)->pluck('id', 'name');
         foreach (['Essencial', 'Trabalho', 'Fim de semana'] as $name) {
             Tag::create(['user_id' => $user->id, 'name' => $name, 'normalized_name' => mb_strtolower($name)]);
         }
         $transactions = [
-            ['description' => 'Salário mensal', 'type' => 'income', 'amount' => 780000, 'date' => $date(12), 'account_id' => 1, 'category_id' => 1, 'notes' => 'Crédito em conta', 'tag_ids' => [1]],
-            ['description' => 'Aluguel', 'type' => 'expense', 'amount' => 235000, 'date' => $date(10), 'account_id' => 1, 'category_id' => 3, 'notes' => 'Apartamento', 'tag_ids' => [1]],
-            ['description' => 'Supermercado Vila', 'type' => 'expense', 'amount' => 48670, 'date' => $date(7), 'account_id' => 1, 'category_id' => 4, 'notes' => 'Compra semanal', 'tag_ids' => [1]],
-            ['description' => 'Projeto freelance', 'type' => 'income', 'amount' => 160000, 'date' => $date(6), 'account_id' => 2, 'category_id' => 2, 'notes' => 'Landing page', 'tag_ids' => [2]],
-            ['description' => 'Combustível', 'type' => 'expense', 'amount' => 21000, 'date' => $date(4), 'account_id' => 1, 'category_id' => 5, 'notes' => 'Posto Central', 'tag_ids' => []],
-            ['description' => 'Cinema', 'type' => 'expense', 'amount' => 9200, 'date' => $date(2), 'account_id' => 3, 'category_id' => 6, 'notes' => 'Ingressos e lanche', 'tag_ids' => [3]],
-            ['description' => 'Farmácia', 'type' => 'expense', 'amount' => 13780, 'date' => $date(1), 'account_id' => 1, 'category_id' => 7, 'notes' => 'Medicamentos', 'tag_ids' => [1]],
-            ['description' => 'Salário mensal', 'type' => 'income', 'amount' => 780000, 'date' => $today->subMonth()->day(5)->format('Y-m-d'), 'account_id' => 1, 'category_id' => 1, 'notes' => 'Crédito em conta', 'tag_ids' => [1]],
-            ['description' => 'Aluguel', 'type' => 'expense', 'amount' => 235000, 'date' => $today->subMonth()->day(7)->format('Y-m-d'), 'account_id' => 1, 'category_id' => 3, 'notes' => 'Apartamento', 'tag_ids' => [1]],
+            ['description' => 'Salário mensal', 'type' => 'income', 'amount' => 780000, 'date' => $date(12), 'account_id' => 1, 'category_id' => $categoryIds['Trabalho'], 'notes' => 'Crédito em conta', 'tag_ids' => [1]],
+            ['description' => 'Aluguel', 'type' => 'expense', 'amount' => 235000, 'date' => $date(10), 'account_id' => 1, 'category_id' => $categoryIds['Moradia'], 'notes' => 'Apartamento', 'tag_ids' => [1]],
+            ['description' => 'Supermercado Vila', 'type' => 'expense', 'amount' => 48670, 'date' => $date(7), 'account_id' => 1, 'category_id' => $categoryIds['Alimentação'], 'notes' => 'Compra semanal', 'tag_ids' => [1]],
+            ['description' => 'Projeto freelance', 'type' => 'income', 'amount' => 160000, 'date' => $date(6), 'account_id' => 2, 'category_id' => $categoryIds['Trabalho'], 'notes' => 'Landing page', 'tag_ids' => [2]],
+            ['description' => 'Combustível', 'type' => 'expense', 'amount' => 21000, 'date' => $date(4), 'account_id' => 1, 'category_id' => $categoryIds['Transporte'], 'notes' => 'Posto Central', 'tag_ids' => []],
+            ['description' => 'Cinema', 'type' => 'expense', 'amount' => 9200, 'date' => $date(2), 'account_id' => 3, 'category_id' => $categoryIds['Lazer e compras'], 'notes' => 'Ingressos e lanche', 'tag_ids' => [3]],
+            ['description' => 'Farmácia', 'type' => 'expense', 'amount' => 13780, 'date' => $date(1), 'account_id' => 1, 'category_id' => $categoryIds['Saúde e cuidados pessoais'], 'notes' => 'Medicamentos', 'tag_ids' => [1]],
+            ['description' => 'Salário mensal', 'type' => 'income', 'amount' => 780000, 'date' => $today->subMonth()->day(5)->format('Y-m-d'), 'account_id' => 1, 'category_id' => $categoryIds['Trabalho'], 'notes' => 'Crédito em conta', 'tag_ids' => [1]],
+            ['description' => 'Aluguel', 'type' => 'expense', 'amount' => 235000, 'date' => $today->subMonth()->day(7)->format('Y-m-d'), 'account_id' => 1, 'category_id' => $categoryIds['Moradia'], 'notes' => 'Apartamento', 'tag_ids' => [1]],
             ['description' => 'Reserva mensal', 'type' => 'transfer', 'amount' => 50000, 'date' => $date(3), 'source_account_id' => 1, 'destination_account_id' => 2, 'notes' => '', 'tag_ids' => []],
         ];
         foreach ($transactions as $attributes) {
@@ -76,9 +67,14 @@ abstract class TestCase extends BaseTestCase
             $transaction = Transaction::create($attributes + ['user_id' => $user->id]);
             $transaction->tags()->sync($tags);
         }
-        foreach ([[3, 250000], [4, 90000], [5, 45000], [6, 35000]] as [$categoryId, $limit]) {
-            Budget::create(['user_id' => $user->id, 'category_id' => $categoryId, 'month' => $today->format('Y-m'), 'limit' => $limit]);
+        foreach ([['Moradia', 250000], ['Alimentação', 90000], ['Transporte', 45000], ['Lazer e compras', 35000]] as [$category, $limit]) {
+            Budget::create(['user_id' => $user->id, 'category_id' => $categoryIds[$category], 'month' => $today->format('Y-m'), 'limit' => $limit]);
         }
-        Budget::create(['user_id' => $user->id, 'category_id' => 4, 'month' => $today->subMonth()->format('Y-m'), 'limit' => 85000]);
+        Budget::create(['user_id' => $user->id, 'category_id' => $categoryIds['Alimentação'], 'month' => $today->subMonth()->format('Y-m'), 'limit' => 85000]);
+    }
+
+    protected function categoryId(string $name): int
+    {
+        return Category::query()->where('name', $name)->value('id') ?? throw new \RuntimeException("Categoria {$name} não encontrada.");
     }
 }

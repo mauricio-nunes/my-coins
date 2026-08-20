@@ -21,13 +21,23 @@ class FinanceFlowTest extends TestCase
         }
     }
 
+    public function test_category_form_offers_the_expanded_icon_catalog(): void
+    {
+        $this->authenticated()->get('/categories/create')
+            ->assertOk()
+            ->assertSee('value="bi-mortarboard"', false)
+            ->assertSee('value="bi-graph-up-arrow"', false)
+            ->assertSee('value="bi-cash-coin"', false);
+    }
+
     public function test_transaction_can_be_created_filtered_updated_and_deleted(): void
     {
+        $this->authenticated();
         $payload = [
             'description' => 'Café com amigos', 'type' => 'expense', 'amount' => '25,90',
-            'date' => now()->format('Y-m-d'), 'account_id' => 1, 'category_id' => 6, 'notes' => '',
+            'date' => now()->format('Y-m-d'), 'account_id' => 1, 'category_id' => $this->categoryId('Lazer e compras'), 'notes' => '',
         ];
-        $this->authenticated()->post('/transactions', $payload)->assertRedirect('/transactions/11');
+        $this->post('/transactions', $payload)->assertRedirect('/transactions/11');
         $this->get('/transactions?search=Caf%C3%A9')->assertSee('Café com amigos');
         $this->put('/transactions/11', array_merge($payload, ['description' => 'Café atualizado']))->assertRedirect('/transactions/11');
         $this->get('/transactions/11')->assertSee('Café atualizado');
@@ -38,21 +48,26 @@ class FinanceFlowTest extends TestCase
 
     public function test_transaction_rejects_a_category_from_the_wrong_type(): void
     {
-        $this->authenticated()->post('/transactions', [
+        $this->authenticated();
+        $this->post('/transactions', [
             'description' => 'Inválida', 'type' => 'income', 'amount' => '10,00',
-            'date' => now()->format('Y-m-d'), 'account_id' => 1, 'category_id' => 4,
+            'date' => now()->format('Y-m-d'), 'account_id' => 1, 'category_id' => $this->categoryId('Alimentação'),
         ])->assertSessionHasErrors('category_id');
     }
 
     public function test_used_category_cannot_be_deleted(): void
     {
-        $this->authenticated()->delete('/categories/4')->assertSessionHas('warning');
+        $this->authenticated();
+        $categoryId = $this->categoryId('Alimentação');
+        $this->delete("/categories/{$categoryId}")->assertSessionHas('warning');
         $this->get('/categories')->assertSee('Alimentação');
     }
 
     public function test_used_category_cannot_change_transaction_type(): void
     {
-        $this->authenticated()->put('/categories/4', [
+        $this->authenticated();
+        $categoryId = $this->categoryId('Alimentação');
+        $this->put("/categories/{$categoryId}", [
             'name' => 'Alimentação', 'type' => 'income', 'icon' => 'bi-basket', 'color' => '#ea580c',
         ])->assertSessionHasErrors('type');
     }
@@ -66,9 +81,10 @@ class FinanceFlowTest extends TestCase
 
     public function test_financial_data_persists_after_logout_and_login(): void
     {
-        $this->authenticated()->post('/transactions', [
+        $this->authenticated();
+        $this->post('/transactions', [
             'description' => 'Registro persistente', 'type' => 'expense', 'amount' => '10,00',
-            'date' => now()->format('Y-m-d'), 'account_id' => 1, 'category_id' => 4,
+            'date' => now()->format('Y-m-d'), 'account_id' => 1, 'category_id' => $this->categoryId('Alimentação'),
         ]);
         $this->post('/logout')->assertRedirect('/login');
         $this->post('/login', ['email' => 'owner@mycoins.local', 'password' => 'Password!234'])->assertRedirect('/dashboard');
@@ -90,7 +106,7 @@ class FinanceFlowTest extends TestCase
         $this->get("/accounts/{$otherAccount->id}")->assertNotFound();
         $this->post('/transactions', [
             'description' => 'Tentativa indevida', 'type' => 'expense', 'amount' => '10,00',
-            'date' => now()->format('Y-m-d'), 'account_id' => $otherAccount->id, 'category_id' => 4,
+            'date' => now()->format('Y-m-d'), 'account_id' => $otherAccount->id, 'category_id' => $this->categoryId('Alimentação'),
         ])->assertSessionHasErrors('account_id');
         $this->assertFalse(Transaction::query()->where('description', 'Tentativa indevida')->exists());
     }
