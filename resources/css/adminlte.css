@@ -62,6 +62,7 @@ body { letter-spacing: .005em; }
 .import-description { max-width: 340px; min-width: 260px; }
 .import-select { min-width: 160px; }
 .import-row-muted > td { opacity: .55; }
+.category-mapping-card { scroll-margin-top: 5.5rem; }
 .result-metric { background: var(--bs-tertiary-bg); border-radius: .75rem; display: flex; flex-direction: column; padding: 1rem; }
 .result-metric span { color: var(--bs-secondary-color); font-size: .8rem; }
 .result-metric strong { font-size: 1.6rem; }

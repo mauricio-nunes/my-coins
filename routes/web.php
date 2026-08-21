@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Finance\AccountController;
+use App\Http\Controllers\Finance\AutomaticCategorizationController;
 use App\Http\Controllers\Finance\BudgetController;
 use App\Http\Controllers\Finance\CategoryController;
 use App\Http\Controllers\Finance\DashboardController;
@@ -36,6 +37,9 @@ Route::middleware(['auth', 'password.changed'])->group(function (): void {
     Route::resource('transfers', TransferController::class)->only(['create', 'store', 'edit', 'update']);
     Route::resource('accounts', AccountController::class);
     Route::resource('categories', CategoryController::class)->except('show');
+    Route::get('/category-mappings', [AutomaticCategorizationController::class, 'index'])->name('category-mappings.index');
+    Route::put('/category-mappings/{category}', [AutomaticCategorizationController::class, 'update'])->name('category-mappings.update');
+    Route::patch('/category-mappings/{category}/position', [AutomaticCategorizationController::class, 'move'])->name('category-mappings.move');
     Route::resource('tags', TagController::class)->only(['index', 'store', 'edit', 'update', 'destroy']);
     Route::resource('budgets', BudgetController::class)->except('show');
     Route::get('/reports', ReportController::class)->name('reports.index');

@@ -23,4 +23,9 @@ class Category extends Model
     {
         return $this->hasMany(Transaction::class);
     }
+
+    public function keywords(): HasMany
+    {
+        return $this->hasMany(CategoryKeyword::class);
+    }
 }

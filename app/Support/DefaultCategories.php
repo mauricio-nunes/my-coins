@@ -57,8 +57,10 @@ class DefaultCategories
 
     public static function createFor(User $user): void
     {
+        $priorities = ['expense' => 0, 'income' => 0];
         foreach (self::definitions() as $category) {
-            $user->categories()->create($category);
+            $type = $category['type'];
+            $user->categories()->create($category + ['match_priority' => ++$priorities[$type]]);
         }
     }
 }

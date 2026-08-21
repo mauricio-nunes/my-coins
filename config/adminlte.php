@@ -66,6 +66,7 @@ return [
         ['text' => 'Transferir', 'route' => 'transfers.create', 'active' => ['transfers*'], 'icon' => 'bi bi-arrow-right-circle'],
         ['text' => 'Contas', 'route' => 'accounts.index', 'active' => ['accounts*'], 'icon' => 'bi bi-wallet2'],
         ['text' => 'Categorias', 'route' => 'categories.index', 'active' => ['categories*'], 'icon' => 'bi bi-tags'],
+        ['text' => 'Categorização automática', 'route' => 'category-mappings.index', 'active' => ['category-mappings*'], 'icon' => 'bi bi-magic'],
         ['text' => 'Tags', 'route' => 'tags.index', 'active' => ['tags*'], 'icon' => 'bi bi-hash'],
         ['text' => 'Orçamentos', 'route' => 'budgets.index', 'active' => ['budgets*'], 'icon' => 'bi bi-bullseye'],
         ['header' => 'ANÁLISE'],

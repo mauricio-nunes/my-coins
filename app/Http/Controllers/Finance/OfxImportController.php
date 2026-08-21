@@ -54,6 +54,9 @@ class OfxImportController extends Controller
         foreach ($rows as $index => $row) {
             $key = $row['fitid'];
             $rows[$index]['duplicate'] = isset($seen[$key]) || $store->hasImportedOfxTransaction($account['id'], $key);
+            $suggestion = $rows[$index]['duplicate'] ? null : $store->suggestCategory($row['type'], $row['description']);
+            $rows[$index]['suggested_category_id'] = $suggestion['category_id'] ?? null;
+            $rows[$index]['suggested_keyword'] = $suggestion['keyword'] ?? null;
             $seen[$key] = true;
         }
 

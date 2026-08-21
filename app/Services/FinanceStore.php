@@ -5,17 +5,22 @@ namespace App\Services;
 use App\Models\Account;
 use App\Models\Budget;
 use App\Models\Category;
+use App\Models\CategoryKeyword;
 use App\Models\Tag;
 use App\Models\Transaction;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use LogicException;
 
 class FinanceStore
 {
+    private array $automaticCategorizationRules = [];
+
     private const MODELS = [
         'accounts' => Account::class,
         'categories' => Category::class,
@@ -40,6 +45,9 @@ class FinanceStore
     {
         $tagIds = $attributes['tag_ids'] ?? null;
         unset($attributes['tag_ids']);
+        if ($resource === 'categories' && ! isset($attributes['match_priority'])) {
+            $attributes['match_priority'] = $this->nextCategoryPriority($attributes['type']);
+        }
         $model = $this->query($resource)->create($attributes + ['user_id' => $this->userId()]);
         if ($model instanceof Transaction && is_array($tagIds)) {
             $model->tags()->sync($tagIds);
@@ -55,6 +63,9 @@ class FinanceStore
             return null;
         }
 
+        if ($model instanceof Category && isset($attributes['type']) && $attributes['type'] !== $model->type) {
+            $attributes['match_priority'] = $this->nextCategoryPriority($attributes['type']);
+        }
         $tagIds = $attributes['tag_ids'] ?? null;
         unset($attributes['tag_ids'], $attributes['user_id']);
         $model->update($attributes);
@@ -217,6 +228,108 @@ class FinanceStore
             || Budget::query()->where('user_id', $this->userId())->where('category_id', $id)->exists();
     }
 
+    public function automaticCategorizationCategories(): Collection
+    {
+        return Category::query()
+            ->where('user_id', $this->userId())
+            ->with(['keywords' => fn (HasMany|Builder $query) => $query->orderBy('id')])
+            ->orderBy('type')
+            ->orderBy('match_priority')
+            ->orderBy('id')
+            ->get()
+            ->map(function (Category $category): array {
+                $attributes = $this->toArray($category);
+                $attributes['keywords'] = $category->keywords->map(fn (CategoryKeyword $keyword): array => [
+                    'id' => $keyword->id,
+                    'keyword' => $keyword->keyword,
+                ])->all();
+
+                return $attributes;
+            });
+    }
+
+    public function syncCategoryKeywords(int $categoryId, array $keywords): ?array
+    {
+        $category = Category::query()->where('user_id', $this->userId())->find($categoryId);
+        if (! $category) {
+            return null;
+        }
+
+        $prepared = collect($keywords)->map(function (string $keyword): array {
+            $clean = $this->cleanCategoryKeyword($keyword);
+
+            return ['keyword' => $clean, 'normalized_keyword' => $this->normalizeCategoryKeyword($clean)];
+        })->filter(fn (array $keyword): bool => $keyword['normalized_keyword'] !== '');
+
+        if ($prepared->pluck('normalized_keyword')->duplicates()->isNotEmpty()) {
+            throw new LogicException('Duplicate normalized category keywords.');
+        }
+
+        DB::transaction(function () use ($category, $prepared): void {
+            $category->keywords()->delete();
+            foreach ($prepared as $keyword) {
+                $category->keywords()->create($keyword + ['user_id' => $this->userId()]);
+            }
+        });
+        $this->automaticCategorizationRules = [];
+
+        return $this->automaticCategorizationCategories()->firstWhere('id', $categoryId);
+    }
+
+    public function moveCategoryPriority(int $categoryId, string $direction): bool
+    {
+        $category = Category::query()->where('user_id', $this->userId())->find($categoryId);
+        if (! $category || ! in_array($direction, ['up', 'down'], true)) {
+            return false;
+        }
+
+        DB::transaction(function () use ($category, $direction): void {
+            $categories = Category::query()->where('user_id', $this->userId())->where('type', $category->type)
+                ->orderBy('match_priority')->orderBy('id')->lockForUpdate()->get()->values();
+            $current = $categories->search(fn (Category $item): bool => $item->is($category));
+            if ($current === false) {
+                return;
+            }
+            $target = $direction === 'up' ? $current - 1 : $current + 1;
+            if (! $categories->has($target)) {
+                return;
+            }
+            $categories->each(function (Category $item, int $index): void {
+                $item->match_priority = $index + 1;
+                $item->save();
+            });
+            $first = $categories[$current];
+            $second = $categories[$target];
+            [$first->match_priority, $second->match_priority] = [$second->match_priority, $first->match_priority];
+            $first->save();
+            $second->save();
+        });
+        $this->automaticCategorizationRules = [];
+
+        return true;
+    }
+
+    public function suggestCategory(string $type, string $description): ?array
+    {
+        if (! in_array($type, ['income', 'expense'], true)) {
+            return null;
+        }
+        $description = $this->normalizeCategoryKeyword($description);
+        if ($description === '') {
+            return null;
+        }
+
+        foreach ($this->automaticCategorizationRules($type) as $rule) {
+            foreach ($rule['keywords'] as $keyword) {
+                if (str_contains($description, $keyword['normalized_keyword'])) {
+                    return ['category_id' => $rule['category_id'], 'keyword' => $keyword['keyword']];
+                }
+            }
+        }
+
+        return null;
+    }
+
     public function budgetSpent(array $budget): int
     {
         return $this->transactions(['category_id' => $budget['category_id']])->where('type', 'expense')
@@ -259,6 +372,40 @@ class FinanceStore
         $model = self::MODELS[$resource] ?? throw new LogicException("Unknown finance resource: {$resource}");
 
         return $model::query()->where('user_id', $this->userId());
+    }
+
+    private function automaticCategorizationRules(string $type): array
+    {
+        return $this->automaticCategorizationRules[$type] ??= Category::query()
+            ->where('user_id', $this->userId())
+            ->where('type', $type)
+            ->whereHas('keywords')
+            ->with(['keywords' => fn (HasMany|Builder $query) => $query->orderBy('id')])
+            ->orderBy('match_priority')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (Category $category): array => [
+                'category_id' => $category->id,
+                'keywords' => $category->keywords->map(fn (CategoryKeyword $keyword): array => [
+                    'keyword' => $keyword->keyword,
+                    'normalized_keyword' => $keyword->normalized_keyword,
+                ])->all(),
+            ])->all();
+    }
+
+    private function nextCategoryPriority(string $type): int
+    {
+        return ((int) Category::query()->where('user_id', $this->userId())->where('type', $type)->max('match_priority')) + 1;
+    }
+
+    private function cleanCategoryKeyword(string $keyword): string
+    {
+        return Str::squish($keyword);
+    }
+
+    private function normalizeCategoryKeyword(string $keyword): string
+    {
+        return Str::lower(Str::ascii($this->cleanCategoryKeyword($keyword)));
     }
 
     private function toArray(Model $model): array

@@ -37,4 +37,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(Category::class);
     }
+
+    public function categoryKeywords(): HasMany
+    {
+        return $this->hasMany(CategoryKeyword::class);
+    }
 }

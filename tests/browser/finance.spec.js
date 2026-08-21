@@ -107,6 +107,19 @@ test('transfer menu opens the dedicated linked-account flow', async ({ page }) =
   await expect(page.getByRole('heading', { name: 'Reserva de férias' })).toBeVisible()
 })
 
+test('automatic categorization rules can be configured', async ({ page }) => {
+  await login(page)
+  await page.goto('/category-mappings')
+  await expect(page.getByRole('heading', { name: 'Categorização automática' })).toBeVisible()
+  const workCard = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Trabalho', exact: true }) })
+  const keywordInput = workCard.locator('.ts-control input')
+  await keywordInput.fill('Pagamento importado')
+  await keywordInput.press('Enter')
+  await workCard.getByRole('button', { name: 'Salvar termos' }).click()
+  await expect(page.getByText('Palavras-chave atualizadas com sucesso.')).toBeVisible()
+  await expect(workCard.locator('.ts-control .item', { hasText: 'Pagamento importado' })).toBeVisible()
+})
+
 test('OFX wizard uploads, classifies and imports transactions', async ({ page }, testInfo) => {
   const suffix = testInfo.project.name.toUpperCase()
   const label = `Importação ${testInfo.project.name.replace('-chromium', '')}`
@@ -132,10 +145,11 @@ test('OFX wizard uploads, classifies and imports transactions', async ({ page },
 
   await expect(page.getByRole('heading', { name: /Revise as movimentações/i })).toBeVisible()
   await expect(page.getByText('Pagamento importado', { exact: true })).toBeVisible()
+  await expect(page.getByText('Sugerida automaticamente')).toBeVisible()
+  await expect(page.getByLabel('Categoria de Pagamento importado')).toHaveValue(/\d+/)
   const accessibility = await new AxeBuilder({ page }).disableRules(['color-contrast']).analyze()
   expect(accessibility.violations.filter(v => ['serious', 'critical'].includes(v.impact))).toEqual([])
 
-  await page.getByLabel('Categoria de Pagamento importado').selectOption({ label: 'Trabalho' })
   const ignoredRow = page.getByRole('row').filter({ hasText: 'Registro ignorado' })
   await ignoredRow.getByRole('switch', { name: 'Ignorar' }).check({ force: true })
   await page.locator('form[data-import-review]').evaluate(form => form.submit())
@@ -146,7 +160,7 @@ test('OFX wizard uploads, classifies and imports transactions', async ({ page },
   await expect(page.getByText('Pagamento importado')).toBeVisible()
 })
 
-for (const path of ['/login', '/dashboard', '/transactions', '/transactions/import', '/transfers/create', '/tags', '/budgets', '/reports']) {
+for (const path of ['/login', '/dashboard', '/transactions', '/transactions/import', '/transfers/create', '/categories', '/category-mappings', '/tags', '/budgets', '/reports']) {
   test(`${path} has no serious accessibility violations`, async ({ page }) => {
     if (path !== '/login') await login(page)
     await page.goto(path)

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Tag;
 use App\Models\Transaction;
+use App\Services\FinanceStore;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -53,6 +54,34 @@ class OfxImportFlowTest extends TestCase
             ->assertSee('2')
             ->assertSee('#Extrato agosto')
             ->assertSee('Ver transações importadas');
+    }
+
+    public function test_preview_preselects_the_first_automatic_category_and_allows_manual_override(): void
+    {
+        $this->authenticated();
+        $workId = $this->categoryId('Trabalho');
+        app(FinanceStore::class)->syncCategoryKeywords($workId, ['pagamento cliente']);
+
+        $this->uploadDraft()->assertRedirect('/transactions/import/review');
+        $draft = session('my_coins.ofx_import_draft');
+        $this->assertSame($workId, $draft['rows'][0]['suggested_category_id']);
+        $this->assertSame('pagamento cliente', $draft['rows'][0]['suggested_keyword']);
+        $this->assertNull($draft['rows'][1]['suggested_category_id']);
+
+        $this->get('/transactions/import/review')
+            ->assertOk()
+            ->assertSee('Sugerida automaticamente')
+            ->assertSee('Correspondência: pagamento cliente');
+
+        $this->post('/transactions/import', [
+            'draft_token' => $draft['token'],
+            'rows' => [
+                0 => ['category_id' => $this->categoryId('Benefícios')],
+                1 => ['ignore' => 1],
+            ],
+        ])->assertRedirect('/transactions/import/result');
+
+        $this->assertSame($this->categoryId('Benefícios'), Transaction::where('ofx_fitid', 'CREDIT-001')->value('category_id'));
     }
 
     public function test_fitids_already_imported_for_the_account_are_blocked(): void
