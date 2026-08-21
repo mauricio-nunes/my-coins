@@ -63,6 +63,7 @@ class OfxParser
         }
 
         $fitId = trim($this->requiredField($block, 'FITID', $number));
+        $checkNumber = trim($this->requiredField($block, 'CHECKNUM', $number));
         $memo = preg_replace('/\s+/u', ' ', trim($this->field($block, 'MEMO') ?? '')) ?? '';
 
         return [
@@ -72,6 +73,7 @@ class OfxParser
             'amount' => $amount,
             'description' => mb_substr($memo !== '' ? $memo : 'Transação OFX', 0, 120),
             'fitid' => mb_substr($fitId, 0, 500),
+            'checknum' => mb_substr($checkNumber, 0, 120),
         ];
     }
 

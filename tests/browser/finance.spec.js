@@ -9,7 +9,7 @@ async function login(page) {
   await expect(page).toHaveURL(/dashboard/)
 }
 
-const importOfx = suffix => `OFXHEADER:100
+const importOfx = (fitIdSuffix, checkNumberSuffix = fitIdSuffix) => `OFXHEADER:100
 DATA:OFXSGML
 VERSION:102
 SECURITY:NONE
@@ -23,14 +23,16 @@ CHARSET:1252
 <TRNTYPE>CREDIT
 <DTPOSTED>20260803000000[-03:EST]
 <TRNAMT>1250.50
-<FITID>PLAYWRIGHT-CREDIT-${suffix}
+<FITID>PLAYWRIGHT-CREDIT-${fitIdSuffix}
+<CHECKNUM>PW-CREDIT-${checkNumberSuffix}
 <MEMO>Pagamento importado
 </STMTTRN>
 <STMTTRN>
 <TRNTYPE>DEBIT
 <DTPOSTED>20260804000000[-03:EST]
 <TRNAMT>-300.00
-<FITID>PLAYWRIGHT-DEBIT-${suffix}
+<FITID>PLAYWRIGHT-DEBIT-${fitIdSuffix}
+<CHECKNUM>PW-DEBIT-${checkNumberSuffix}
 <MEMO>Registro ignorado
 </STMTTRN>
 </BANKTRANLIST>
@@ -158,6 +160,23 @@ test('OFX wizard uploads, classifies and imports transactions', async ({ page },
   await expect(page.getByText(`#${label}`)).toBeVisible()
   await page.getByRole('link', { name: 'Ver transações importadas' }).click()
   await expect(page.getByText('Pagamento importado')).toBeVisible()
+
+  await page.goto('/transactions/import')
+  await page.getByLabel('Conta').selectOption('1')
+  const repeatedLabel = `${label} repetida`
+  const repeatedLabelInput = page.locator('.ts-control input').first()
+  await repeatedLabelInput.fill(repeatedLabel)
+  await page.locator('.ts-dropdown .create').click()
+  await repeatedLabelInput.press('Escape')
+  await page.getByLabel('Arquivo OFX').setInputFiles({
+    name: 'agosto-atualizado.ofx',
+    mimeType: 'application/x-ofx',
+    buffer: Buffer.from(importOfx(`REEXPORT-${suffix}`, suffix)),
+  })
+  await page.locator('form[action$="/preview"]').evaluate(form => form.submit())
+  const duplicateRow = page.getByRole('row').filter({ hasText: 'Pagamento importado' })
+  await expect(duplicateRow.getByText('Já importada')).toBeVisible()
+  await expect(duplicateRow.getByLabel('Categoria de Pagamento importado')).toBeDisabled()
 })
 
 for (const path of ['/login', '/dashboard', '/transactions', '/transactions/import', '/transfers/create', '/categories', '/category-mappings', '/tags', '/budgets', '/reports']) {

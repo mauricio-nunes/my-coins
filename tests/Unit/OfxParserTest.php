@@ -19,6 +19,7 @@ class OfxParserTest extends TestCase
         $this->assertSame(1550000, $rows[0]['amount']);
         $this->assertSame('Ted-t Elet Disp Remet.nc7 Integradora Ltda', $rows[0]['description']);
         $this->assertNotSame('', $rows[0]['fitid']);
+        $this->assertSame('6948271', $rows[0]['checknum']);
         $this->assertCount(45, array_filter($rows, fn (array $row): bool => $row['type'] === 'expense'));
     }
 
@@ -39,6 +40,7 @@ class OfxParserTest extends TestCase
             'wrong currency' => ['<OFX><CURDEF>USD<STMTTRN></STMTTRN>', 'somente extratos em BRL'],
             'no transactions' => ['<OFX><CURDEF>BRL', 'Nenhuma movimentação'],
             'inconsistent value' => [self::ofx('<TRNTYPE>DEBIT<DTPOSTED>20260803000000[-03:EST]<TRNAMT>10.00<FITID>A-1<MEMO>Teste'), 'tipo e valor incompatíveis'],
+            'missing check number' => [self::ofx('<TRNTYPE>CREDIT<DTPOSTED>20260803000000[-03:EST]<TRNAMT>10.00<FITID>A-1<MEMO>Teste'), 'não possui o campo CHECKNUM'],
         ];
     }
 

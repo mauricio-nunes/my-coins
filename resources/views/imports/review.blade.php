@@ -33,7 +33,7 @@
                 $automaticSuggestionSelected = ($row['suggested_category_id'] ?? null) && $categoryId == $row['suggested_category_id'];
             @endphp
             <tr data-import-row data-locked="{{ $locked ? 'true' : 'false' }}" class="{{ $locked ? 'table-light opacity-75' : '' }}">
-                <td class="import-description"><strong>{{ $row['description'] }}</strong><span class="small text-body-secondary d-block">{{ \Carbon\Carbon::parse($row['date'])->format('d/m/Y') }} · FITID {{ $row['fitid'] }}</span>@if($locked)<span class="badge text-bg-warning mt-1">Já importada</span>@endif</td>
+                <td class="import-description"><strong>{{ $row['description'] }}</strong><span class="small text-body-secondary d-block">{{ \Carbon\Carbon::parse($row['date'])->format('d/m/Y') }} · CHECKNUM {{ $row['checknum'] }}</span><span class="visually-hidden">FITID {{ $row['fitid'] }}</span>@if($locked)<span class="badge text-bg-warning mt-1">Já importada</span>@endif</td>
                 <td><span class="badge rounded-pill {{ $row['type'] === 'income' ? 'text-bg-success' : 'text-bg-danger' }}">{{ $row['ofx_type'] === 'CREDIT' ? 'Receita' : 'Despesa' }}</span></td>
                 <td class="text-end fw-semibold {{ $row['type'] === 'income' ? 'text-success' : 'text-danger' }}"><x-money :value="($row['type'] === 'income' ? 1 : -1) * $row['amount']" :signed="true" /></td>
                 <td><div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="ignore-{{ $index }}" name="rows[{{ $index }}][ignore]" value="1" data-import-ignore @checked($ignored || $locked) @disabled($locked)><label class="form-check-label small" for="ignore-{{ $index }}">Ignorar</label></div></td>

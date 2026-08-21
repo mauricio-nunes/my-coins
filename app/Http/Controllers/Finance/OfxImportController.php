@@ -52,8 +52,8 @@ class OfxImportController extends Controller
 
         $seen = [];
         foreach ($rows as $index => $row) {
-            $key = $row['fitid'];
-            $rows[$index]['duplicate'] = isset($seen[$key]) || $store->hasImportedOfxTransaction($account['id'], $key);
+            $key = $store->ofxDuplicateKey($account['id'], $row);
+            $rows[$index]['duplicate'] = isset($seen[$key]) || $store->hasImportedOfxTransaction($account['id'], $row);
             $suggestion = $rows[$index]['duplicate'] ? null : $store->suggestCategory($row['type'], $row['description']);
             $rows[$index]['suggested_category_id'] = $suggestion['category_id'] ?? null;
             $rows[$index]['suggested_keyword'] = $suggestion['keyword'] ?? null;
@@ -127,7 +127,7 @@ class OfxImportController extends Controller
         $previewDuplicates = 0;
 
         foreach ($draft['rows'] as $index => $row) {
-            if ($row['duplicate'] || $store->hasImportedOfxTransaction($account['id'], $row['fitid'])) {
+            if ($row['duplicate'] || $store->hasImportedOfxTransaction($account['id'], $row)) {
                 $previewDuplicates++;
 
                 continue;
@@ -147,6 +147,7 @@ class OfxImportController extends Controller
                 'notes' => $row['fitid'],
                 'ofx_type' => $row['ofx_type'],
                 'ofx_fitid' => $row['fitid'],
+                'ofx_checknum' => $row['checknum'],
                 'ofx_account_id' => $account['id'],
                 'imported_at' => now()->toIso8601String(),
             ];

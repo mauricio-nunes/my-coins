@@ -123,10 +123,28 @@ class FinanceStore
         return $query->orderByDesc('date')->orderByDesc('id')->get()->map(fn (Transaction $transaction): array => $this->toArray($transaction));
     }
 
-    public function hasImportedOfxTransaction(int $accountId, string $fitId): bool
+    public function hasImportedOfxTransaction(int $accountId, array $transaction): bool
     {
         return Transaction::query()->where('user_id', $this->userId())
-            ->where('ofx_account_id', $accountId)->where('ofx_fitid', $fitId)->exists();
+            ->where('active_ofx_key', $this->ofxDuplicateKey($accountId, $transaction))->exists();
+    }
+
+    public function ofxDuplicateKey(int $accountId, array $transaction): string
+    {
+        $checkNumber = Str::upper(trim((string) ($transaction['ofx_checknum'] ?? $transaction['checknum'] ?? '')));
+        $description = Str::lower(Str::ascii((string) ($transaction['description'] ?? '')));
+        $description = trim(preg_replace('/[^a-z0-9]+/', ' ', $description) ?? $description);
+        $identity = [
+            $this->userId(),
+            $accountId,
+            $checkNumber,
+            (string) ($transaction['date'] ?? ''),
+            (string) ($transaction['type'] ?? ''),
+            (int) ($transaction['amount'] ?? 0),
+            $description,
+        ];
+
+        return hash('sha256', implode('|', $identity));
     }
 
     public function importOfxTransactions(int $accountId, string $label, array $transactions): array
@@ -137,8 +155,8 @@ class FinanceStore
             $duplicates = 0;
 
             foreach ($transactions as $attributes) {
-                $key = $this->ofxKey($accountId, $attributes['ofx_fitid']);
-                if (Transaction::query()->where('active_ofx_key', $key)->exists()) {
+                $key = $this->ofxDuplicateKey($accountId, $attributes);
+                if (Transaction::query()->where('user_id', $this->userId())->where('active_ofx_key', $key)->exists()) {
                     $duplicates++;
 
                     continue;
@@ -446,11 +464,6 @@ class FinanceStore
     private function normalizeTagName(string $name): string
     {
         return mb_strtolower($this->cleanTagName($name));
-    }
-
-    private function ofxKey(int $accountId, string $fitId): string
-    {
-        return hash('sha256', $this->userId().'|'.$accountId.'|'.$fitId);
     }
 
     private function userId(): int

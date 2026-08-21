@@ -42,6 +42,7 @@ class OfxImportFlowTest extends TestCase
         $this->assertSame('income', $income['type']);
         $this->assertSame(125050, $income['amount']);
         $this->assertSame('CREDIT-001', $income['notes']);
+        $this->assertSame('CREDIT-CHECK-001', $income['ofx_checknum']);
         $this->assertSame([$tag->id], $income->tags()->pluck('tags.id')->all());
         $this->assertSame('transfer', $transfer['type']);
         $this->assertSame(1, $transfer['source_account_id']);
@@ -84,7 +85,7 @@ class OfxImportFlowTest extends TestCase
         $this->assertSame($this->categoryId('Benefícios'), Transaction::where('ofx_fitid', 'CREDIT-001')->value('category_id'));
     }
 
-    public function test_fitids_already_imported_for_the_account_are_blocked(): void
+    public function test_overlapping_exports_with_different_fitids_are_blocked_by_the_full_fingerprint(): void
     {
         $this->uploadDraft();
         $draft = session('my_coins.ofx_import_draft');
@@ -93,7 +94,12 @@ class OfxImportFlowTest extends TestCase
             'rows' => [0 => ['category_id' => $this->categoryId('Trabalho')], 1 => ['ignore' => 1]],
         ]);
 
-        $this->uploadDraft();
+        $secondExport = str_replace(
+            ['<FITID>CREDIT-001', '<CHECKNUM>CREDIT-CHECK-001'],
+            ['<FITID>CREDIT-NEW-EXPORT', '<CHECKNUM>credit-check-001'],
+            $this->ofx(),
+        );
+        $this->uploadDraft($secondExport);
         $duplicateDraft = session('my_coins.ofx_import_draft');
         $this->assertTrue($duplicateDraft['rows'][0]['duplicate']);
         $this->assertFalse($duplicateDraft['rows'][1]['duplicate']);
@@ -107,6 +113,60 @@ class OfxImportFlowTest extends TestCase
         $this->assertSame(1, session('my_coins.ofx_import_result.duplicates'));
         $this->assertSame(0, session('my_coins.ofx_import_result.imported'));
         $this->assertSame(1, Transaction::where('ofx_fitid', 'CREDIT-001')->count());
+    }
+
+    public function test_same_checknum_remains_distinct_when_transaction_fields_differ(): void
+    {
+        $ofx = str_replace('<CHECKNUM>DEBIT-CHECK-001', '<CHECKNUM>CREDIT-CHECK-001', $this->ofx());
+        $this->uploadDraft($ofx);
+        $draft = session('my_coins.ofx_import_draft');
+
+        $this->assertFalse($draft['rows'][0]['duplicate']);
+        $this->assertFalse($draft['rows'][1]['duplicate']);
+        $this->post('/transactions/import', [
+            'draft_token' => $draft['token'],
+            'rows' => [
+                0 => ['category_id' => $this->categoryId('Trabalho')],
+                1 => ['category_id' => $this->categoryId('Alimentação')],
+            ],
+        ])->assertRedirect('/transactions/import/result');
+
+        $this->assertSame(2, session('my_coins.ofx_import_result.imported'));
+    }
+
+    public function test_repeated_fingerprint_inside_one_file_is_locked_in_preview(): void
+    {
+        $ofx = $this->ofx();
+        preg_match('/<STMTTRN>.*?<\/STMTTRN>/s', $ofx, $matches);
+        $duplicate = str_replace('<FITID>CREDIT-001', '<FITID>CREDIT-SECOND-EXPORT', $matches[0]);
+        $ofx = str_replace('</BANKTRANLIST>', $duplicate."\n</BANKTRANLIST>", $ofx);
+
+        $this->uploadDraft($ofx);
+        $draft = session('my_coins.ofx_import_draft');
+
+        $this->assertFalse($draft['rows'][0]['duplicate']);
+        $this->assertFalse($draft['rows'][1]['duplicate']);
+        $this->assertTrue($draft['rows'][2]['duplicate']);
+        $this->get('/transactions/import/review')->assertSee('1 duplicadas');
+    }
+
+    public function test_same_fingerprint_is_allowed_for_another_selected_account(): void
+    {
+        $this->uploadDraft();
+        $firstDraft = session('my_coins.ofx_import_draft');
+        $this->post('/transactions/import', [
+            'draft_token' => $firstDraft['token'],
+            'rows' => [0 => ['category_id' => $this->categoryId('Trabalho')], 1 => ['ignore' => 1]],
+        ]);
+
+        $this->authenticated()->post('/transactions/import/preview', [
+            'account_id' => 2,
+            'label' => 'Outra conta',
+            'ofx_file' => UploadedFile::fake()->createWithContent('outra-conta.ofx', $this->ofx()),
+        ]);
+        $secondDraft = session('my_coins.ofx_import_draft');
+
+        $this->assertFalse($secondDraft['rows'][0]['duplicate']);
     }
 
     public function test_a_deleted_ofx_transaction_can_be_imported_again(): void
@@ -165,6 +225,13 @@ class OfxImportFlowTest extends TestCase
             'label' => 'Importação',
             'ofx_file' => UploadedFile::fake()->createWithContent('extrato.ofx', $usd),
         ])->assertSessionHasErrors(['ofx_file']);
+
+        $missingCheckNumber = preg_replace('/<CHECKNUM>[^\r\n]+\R/', '', $this->ofx(), 1);
+        $this->post('/transactions/import/preview', [
+            'account_id' => 1,
+            'label' => 'Importação',
+            'ofx_file' => UploadedFile::fake()->createWithContent('sem-checknum.ofx', $missingCheckNumber),
+        ])->assertSessionHasErrors(['ofx_file']);
     }
 
     public function test_review_and_result_require_their_session_state(): void
@@ -175,12 +242,12 @@ class OfxImportFlowTest extends TestCase
             ->assertRedirect('/transactions/import');
     }
 
-    private function uploadDraft(): TestResponse
+    private function uploadDraft(?string $contents = null): TestResponse
     {
         return $this->authenticated()->post('/transactions/import/preview', [
             'account_id' => 1,
             'label' => 'Extrato agosto',
-            'ofx_file' => UploadedFile::fake()->createWithContent('agosto.ofx', $this->ofx()),
+            'ofx_file' => UploadedFile::fake()->createWithContent('agosto.ofx', $contents ?? $this->ofx()),
         ]);
     }
 
@@ -202,6 +269,7 @@ CHARSET:1252
 <DTPOSTED>20260803000000[-03:EST]
 <TRNAMT>1250.50
 <FITID>CREDIT-001
+<CHECKNUM>CREDIT-CHECK-001
 <MEMO>Pagamento cliente
 </STMTTRN>
 <STMTTRN>
@@ -209,6 +277,7 @@ CHARSET:1252
 <DTPOSTED>20260804000000[-03:EST]
 <TRNAMT>-300.00
 <FITID>DEBIT-001
+<CHECKNUM>DEBIT-CHECK-001
 <MEMO>Reserva mensal
 </STMTTRN>
 </BANKTRANLIST>
