@@ -86,6 +86,26 @@ test('tags can be created inline, filtered and managed', async ({ page }, testIn
   await expect(page.getByText(`#${renamedTag}`)).toBeVisible()
 })
 
+test('financial reports can be filtered by tag', async ({ page }) => {
+  await login(page)
+  await page.goto('/reports')
+
+  const reportFilters = page.locator('form[method="get"]')
+  const tagInput = reportFilters.locator('.ts-control input')
+  await tagInput.fill('Fim de semana')
+  await page.locator('.ts-dropdown').getByRole('option', { name: 'Fim de semana' }).click()
+  await tagInput.press('Escape')
+  await reportFilters.getByRole('button', { name: /Filtrar/i }).click()
+
+  await expect(page).toHaveURL(/reports\?.*tags(%5B%5D|\[\])=3/)
+  await expect(reportFilters.locator('.ts-control .item')).toContainText('Fim de semana')
+  const details = page.locator('.card').filter({ has: page.getByRole('heading', { name: 'Detalhamento por categoria' }) })
+  await expect(details.getByRole('row').filter({ hasText: 'Lazer e compras' })).toContainText('R$ 92,00')
+
+  const accessibility = await new AxeBuilder({ page }).disableRules(['color-contrast']).analyze()
+  expect(accessibility.violations.filter(v => ['serious', 'critical'].includes(v.impact))).toEqual([])
+})
+
 test('transfer menu opens the dedicated linked-account flow', async ({ page }) => {
   await login(page)
   if ((page.viewportSize()?.width || 0) < 992) {

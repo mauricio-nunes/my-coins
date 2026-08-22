@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Tag;
 use App\Models\Transaction;
+use App\Models\User;
+use Carbon\CarbonImmutable;
 use Tests\TestCase;
 
 class TagFlowTest extends TestCase
@@ -51,6 +53,78 @@ class TagFlowTest extends TestCase
             ->assertSee('Evento profissional')
             ->assertDontSee('Projeto freelance')
             ->assertDontSee('Cinema');
+    }
+
+    public function test_report_can_be_filtered_by_one_tag(): void
+    {
+        $response = $this->authenticated()->get('/reports?tags%5B0%5D=1');
+
+        $response->assertOk()
+            ->assertViewHas('report', function (array $report): bool {
+                return $report['income'] === 1560000
+                    && $report['expenses'] === 532450
+                    && $report['result'] === 1027550
+                    && $report['byCategory']->pluck('name')->all() === [
+                        'Moradia',
+                        'Alimentação',
+                        'Saúde e cuidados pessoais',
+                    ];
+            })
+            ->assertSee('value="1" selected', false);
+    }
+
+    public function test_report_requires_all_selected_tags(): void
+    {
+        $this->authenticated()->post('/transactions', $this->transactionPayload([
+            'description' => 'Evento essencial de trabalho',
+            'tags' => ['Essencial', 'Trabalho'],
+        ]));
+
+        $this->get('/reports?tags%5B0%5D=1&tags%5B1%5D=2')
+            ->assertOk()
+            ->assertViewHas('report', fn (array $report): bool => $report['income'] === 0
+                && $report['expenses'] === 35000
+                && $report['result'] === -35000
+                && $report['transactions']->pluck('description')->all() === ['Evento essencial de trabalho']);
+    }
+
+    public function test_report_tag_filter_combines_with_period_account_and_category(): void
+    {
+        $this->authenticated();
+        $today = CarbonImmutable::today();
+        $query = http_build_query([
+            'from' => $today->subDays(11)->format('Y-m-d'),
+            'to' => $today->format('Y-m-d'),
+            'account_id' => 1,
+            'category_id' => $this->categoryId('Moradia'),
+            'tags' => [1],
+        ]);
+
+        $this->get("/reports?{$query}")
+            ->assertOk()
+            ->assertViewHas('report', fn (array $report): bool => $report['income'] === 0
+                && $report['expenses'] === 235000
+                && $report['byCategory']->pluck('name')->all() === ['Moradia']);
+    }
+
+    public function test_report_rejects_invalid_tags_and_does_not_expose_another_users_data(): void
+    {
+        $this->authenticated()->get('/reports?tags%5B0%5D=invalid')
+            ->assertSessionHasErrors('tags.0');
+
+        $otherUser = User::factory()->create();
+        $otherTag = Tag::create([
+            'user_id' => $otherUser->id,
+            'name' => 'Privada',
+            'normalized_name' => 'privada',
+        ]);
+
+        $this->get('/reports?'.http_build_query(['tags' => [$otherTag->id]]))
+            ->assertOk()
+            ->assertDontSee('Privada')
+            ->assertViewHas('report', fn (array $report): bool => $report['transactions']->isEmpty()
+                && $report['income'] === 0
+                && $report['expenses'] === 0);
     }
 
     public function test_free_text_search_includes_tag_names(): void
