@@ -106,6 +106,25 @@ test('financial reports can be filtered by tag', async ({ page }) => {
   expect(accessibility.violations.filter(v => ['serious', 'critical'].includes(v.impact))).toEqual([])
 })
 
+test('transactions can be filtered by category', async ({ page }) => {
+  await login(page)
+  await page.goto('/transactions')
+
+  const filters = page.locator('form[method="get"]')
+  await filters.getByLabel('Categoria').selectOption({ label: 'Alimentação' })
+  await filters.getByRole('button', { name: 'Aplicar filtros' }).click()
+
+  await expect(page).toHaveURL(/transactions\?.*category_id=\d+/)
+  await expect(filters.getByLabel('Categoria')).toHaveValue(/\d+/)
+  const movements = page.locator('table')
+  await expect(movements.getByText('Supermercado Vila')).toBeVisible()
+  await expect(movements.getByText('Aluguel')).toHaveCount(0)
+  await expect(movements.getByText('Reserva mensal')).toHaveCount(0)
+
+  const accessibility = await new AxeBuilder({ page }).disableRules(['color-contrast']).analyze()
+  expect(accessibility.violations.filter(v => ['serious', 'critical'].includes(v.impact))).toEqual([])
+})
+
 test('transfer menu opens the dedicated linked-account flow', async ({ page }) => {
   await login(page)
   if ((page.viewportSize()?.width || 0) < 992) {

@@ -46,6 +46,38 @@ class FinanceFlowTest extends TestCase
         $this->assertSoftDeleted('transactions', ['id' => 11, 'description' => 'Café atualizado']);
     }
 
+    public function test_transactions_can_be_filtered_by_category(): void
+    {
+        $this->authenticated();
+        $categoryId = $this->categoryId('Alimentação');
+
+        $this->get('/transactions?'.http_build_query(['category_id' => $categoryId]))
+            ->assertOk()
+            ->assertSee('Supermercado Vila')
+            ->assertDontSee('Aluguel')
+            ->assertDontSee('Reserva mensal')
+            ->assertSee("value=\"{$categoryId}\" selected", false);
+    }
+
+    public function test_category_filter_combines_with_other_transaction_filters(): void
+    {
+        $this->authenticated();
+        $query = http_build_query([
+            'type' => 'income',
+            'account_id' => 2,
+            'category_id' => $this->categoryId('Trabalho'),
+            'from' => now()->subDays(7)->format('Y-m-d'),
+            'to' => now()->format('Y-m-d'),
+            'tags' => [2],
+        ]);
+
+        $this->get("/transactions?{$query}")
+            ->assertOk()
+            ->assertSee('Projeto freelance')
+            ->assertDontSee('Salário mensal')
+            ->assertDontSee('Reserva mensal');
+    }
+
     public function test_transaction_rejects_a_category_from_the_wrong_type(): void
     {
         $this->authenticated();
