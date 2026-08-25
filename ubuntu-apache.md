@@ -156,6 +156,7 @@ test -z "$(git status --porcelain)" || {
 }
 
 LOCAL_RELEASE_DIR="$(mktemp -d -t my-coins-ubuntu.XXXXXX)"
+chmod 755 "$LOCAL_RELEASE_DIR"
 git archive HEAD | tar -x -C "$LOCAL_RELEASE_DIR"
 
 APP_UID="$(id -u)" APP_GID="$(id -g)" docker-compose run --rm --no-deps \
@@ -183,7 +184,7 @@ sha256sum my-coins-release.tar.gz
 echo "Release criado e validado com sucesso."
 ```
 
-O `set -e` encerra o processo na primeira falha. Os comandos `test` e a inspeção do `.tar.gz` impedem que um pacote sem `vendor/autoload.php` ou sem o manifesto do Vite seja publicado. O checksum só é calculado depois dessas validações.
+O `set -e` encerra o processo na primeira falha. O `chmod 755` é necessário porque `mktemp` cria o diretório com modo `700`; sem a normalização, o `tar` pode aplicar esse modo ao diretório da aplicação no servidor e impedir que o Apache atravesse o caminho. Os comandos `test` e a inspeção do `.tar.gz` impedem que um pacote sem `vendor/autoload.php` ou sem o manifesto do Vite seja publicado. O checksum só é calculado depois dessas validações.
 
 O pacote final contém PHP, `vendor/` e assets compilados. Ele não contém `.env`, `node_modules`, testes nem arquivos OFX ignorados pelo Git. Embora o Composer seja executado pelo Docker local, o pacote produzido é uma aplicação PHP comum e será executado sem Docker no Ubuntu.
 
@@ -209,13 +210,19 @@ No servidor:
 sudo mkdir -p /var/www/my-coins
 sudo tar -xzf /tmp/my-coins-release.tar.gz -C /var/www/my-coins
 sudo chown -R USUARIO_DEPLOY:www-data /var/www/my-coins
+sudo chmod 755 /var /var/www
+sudo chmod 750 /var/www/my-coins
+sudo find /var/www/my-coins/public -type d -exec chmod 755 {} \;
+sudo find /var/www/my-coins/public -type f -exec chmod 644 {} \;
 sudo mkdir -p /var/www/my-coins/storage/framework/{cache,sessions,views}
 sudo chown -R USUARIO_DEPLOY:www-data /var/www/my-coins/storage /var/www/my-coins/bootstrap/cache
 sudo find /var/www/my-coins/storage /var/www/my-coins/bootstrap/cache -type d -exec chmod 2775 {} \;
 sudo find /var/www/my-coins/storage /var/www/my-coins/bootstrap/cache -type f -exec chmod 664 {} \;
+sudo -u www-data test -x /var/www/my-coins
+sudo -u www-data test -r /var/www/my-coins/public/index.php
 ```
 
-Os demais arquivos podem permanecer legíveis pelo Apache e graváveis somente pelo usuário de deploy.
+Os dois últimos comandos não imprimem nada quando passam. Eles garantem que o Apache consegue atravessar o diretório da aplicação e ler o front controller. Os demais arquivos podem permanecer legíveis pelo Apache e graváveis somente pelo usuário de deploy.
 
 ## 8. Arquivo de produção `.env`
 
@@ -424,9 +431,14 @@ sudo rsync -a --delete \
   "$DEPLOY_STAGE/" /var/www/my-coins/
 
 sudo chown -R USUARIO_DEPLOY:www-data /var/www/my-coins
+sudo chmod 750 /var/www/my-coins
+sudo find /var/www/my-coins/public -type d -exec chmod 755 {} \;
+sudo find /var/www/my-coins/public -type f -exec chmod 644 {} \;
 sudo chown -R USUARIO_DEPLOY:www-data /var/www/my-coins/storage /var/www/my-coins/bootstrap/cache
 sudo find /var/www/my-coins/storage /var/www/my-coins/bootstrap/cache -type d -exec chmod 2775 {} \;
 sudo find /var/www/my-coins/storage /var/www/my-coins/bootstrap/cache -type f -exec chmod 664 {} \;
+sudo -u www-data test -x /var/www/my-coins
+sudo -u www-data test -r /var/www/my-coins/public/index.php
 
 cd /var/www/my-coins
 php artisan optimize:clear
@@ -497,6 +509,26 @@ sudo apache2ctl configtest
 ```
 
 Confirme `AllowOverride All`, o `.htaccess` e o `DocumentRoot` terminando em `/public`.
+
+### Apache retorna 403 por falta de `search permissions`
+
+Esse erro indica que o usuário `www-data` não possui permissão de travessia (`x`) em algum diretório do caminho. Identifique o componente:
+
+```bash
+namei -l /var/www/my-coins/public/index.php
+sudo -u www-data test -x /var/www/my-coins && echo "Diretório acessível"
+sudo -u www-data test -r /var/www/my-coins/public/index.php && echo "index.php acessível"
+```
+
+Corrija o diretório da aplicação sem usar `777`:
+
+```bash
+sudo chown USUARIO_DEPLOY:www-data /var/www/my-coins
+sudo chmod 750 /var/www/my-coins
+sudo chmod 755 /var /var/www /var/www/my-coins/public
+```
+
+O usuário de deploy mantém acesso como proprietário e o Apache atravessa `my-coins` por pertencer ao grupo `www-data`.
 
 ### Banco ou `could not find driver`
 

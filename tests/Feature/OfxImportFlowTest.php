@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Account;
 use App\Models\Tag;
 use App\Models\Transaction;
 use App\Services\FinanceStore;
@@ -287,6 +288,25 @@ class OfxImportFlowTest extends TestCase
             'label' => 'Importação',
             'ofx_file' => UploadedFile::fake()->createWithContent('extrato.ofx', $this->ofx()),
         ])->assertSessionHasErrors(['ofx_file']);
+    }
+
+    public function test_ofx_transactions_before_the_opening_balance_date_remain_importable(): void
+    {
+        $this->authenticated();
+        Account::query()->whereKey(1)->update(['opening_balance_date' => '2026-08-10']);
+
+        $this->uploadDraft()->assertRedirect('/transactions/import/review');
+        $draft = session('my_coins.ofx_import_draft');
+        $this->post('/transactions/import', [
+            'draft_token' => $draft['token'],
+            'rows' => [
+                0 => ['category_id' => $this->categoryId('Trabalho')],
+                1 => ['category_id' => $this->categoryId('Alimentação')],
+            ],
+        ])->assertRedirect('/transactions/import/result');
+
+        $this->assertSame(2, session('my_coins.ofx_import_result.imported'));
+        $this->assertDatabaseHas('transactions', ['ofx_fitid' => 'CREDIT-001', 'date' => '2026-08-03']);
     }
 
     private function uploadDraft(?string $contents = null, string $bankFormat = 'bradesco'): TestResponse

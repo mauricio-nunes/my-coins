@@ -8,6 +8,7 @@ use App\Models\Category;
 use App\Models\CategoryKeyword;
 use App\Models\Tag;
 use App\Models\Transaction;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -222,14 +223,37 @@ class FinanceStore
 
     public function balance(int $accountId): int
     {
+        return $this->balanceAt($accountId, CarbonImmutable::today()->toDateString());
+    }
+
+    public function balanceAt(int $accountId, string $date): int
+    {
         $account = $this->find('accounts', $accountId);
         if (! $account) {
             return 0;
         }
 
+        $balanceDate = CarbonImmutable::parse($account['opening_balance_date'])->toDateString();
+        $requestedDate = CarbonImmutable::parse($date)->toDateString();
+        if ($requestedDate < $balanceDate) {
+            return 0;
+        }
+
         return (int) $account['opening_balance'] + $this->transactions(['account_id' => $accountId])
-            ->where('date', '<=', now()->format('Y-m-d'))
+            ->where('date', '>=', $balanceDate)
+            ->where('date', '<=', $requestedDate)
             ->sum(fn (array $transaction): int => $this->transactionEffect($transaction, $accountId));
+    }
+
+    public function hasTransactionsBeforeOpeningBalance(int $accountId): bool
+    {
+        $account = $this->find('accounts', $accountId);
+        if (! $account) {
+            return false;
+        }
+
+        return $this->transactions(['account_id' => $accountId])
+            ->contains(fn (array $transaction): bool => $transaction['date'] < $account['opening_balance_date']);
     }
 
     public function dashboard(): array

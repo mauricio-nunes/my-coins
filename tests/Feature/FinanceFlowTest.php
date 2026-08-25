@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Account;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\FinanceStore;
 use Tests\TestCase;
 
 class FinanceFlowTest extends TestCase
@@ -111,6 +112,82 @@ class FinanceFlowTest extends TestCase
         $this->get('/transactions/create')->assertDontSee('Conta principal · Banco Aurora');
     }
 
+    public function test_account_requires_and_persists_the_opening_balance_date(): void
+    {
+        $this->authenticated()->get('/accounts/create')
+            ->assertOk()
+            ->assertSee('Data do saldo inicial')
+            ->assertSee('O saldo informado representa o início deste dia.')
+            ->assertSee('os saldos, a evolução e os indicadores podem não ser apresentados corretamente');
+
+        $payload = [
+            'name' => 'Conta com marco',
+            'institution' => 'Banco Exemplo',
+            'type' => 'checking',
+            'color' => '#0f766e',
+            'opening_balance' => '1250,75',
+        ];
+        $this->post('/accounts', $payload)->assertSessionHasErrors('opening_balance_date');
+
+        $date = now()->subDays(15)->toDateString();
+        $this->post('/accounts', $payload + ['opening_balance_date' => $date])->assertSessionHasNoErrors();
+        $account = Account::query()->where('name', 'Conta com marco')->firstOrFail();
+
+        $this->assertSame($date, $account->opening_balance_date->toDateString());
+        $this->assertSame(125075, $account->opening_balance);
+        $this->get("/accounts/{$account->id}")
+            ->assertOk()
+            ->assertSee('Saldo inicial de')
+            ->assertSee(now()->subDays(15)->format('d/m/Y'));
+    }
+
+    public function test_balance_uses_the_opening_date_but_earlier_transactions_remain_allowed(): void
+    {
+        $this->authenticated();
+        $anchor = now()->subDays(2);
+        $account = Account::create([
+            'user_id' => auth()->id(),
+            'name' => 'Conta temporal',
+            'institution' => '',
+            'type' => 'checking',
+            'color' => '#2563eb',
+            'opening_balance' => 10000,
+            'opening_balance_date' => $anchor->toDateString(),
+        ]);
+        $base = ['account_id' => $account->id, 'notes' => ''];
+
+        $this->post('/transactions', $base + [
+            'description' => 'Receita anterior', 'type' => 'income', 'amount' => '50,00',
+            'date' => $anchor->copy()->subDay()->toDateString(), 'category_id' => $this->categoryId('Trabalho'),
+        ])->assertSessionHasNoErrors();
+        $this->post('/transactions', $base + [
+            'description' => 'Receita no marco', 'type' => 'income', 'amount' => '20,00',
+            'date' => $anchor->toDateString(), 'category_id' => $this->categoryId('Trabalho'),
+        ])->assertSessionHasNoErrors();
+        $this->post('/transactions', $base + [
+            'description' => 'Despesa posterior', 'type' => 'expense', 'amount' => '10,00',
+            'date' => $anchor->copy()->addDay()->toDateString(), 'category_id' => $this->categoryId('Alimentação'),
+        ])->assertSessionHasNoErrors();
+
+        $store = app(FinanceStore::class);
+        $this->assertSame(0, $store->balanceAt($account->id, $anchor->copy()->subDay()->toDateString()));
+        $this->assertSame(12000, $store->balanceAt($account->id, $anchor->toDateString()));
+        $this->assertSame(11000, $store->balance($account->id));
+        $this->get("/accounts/{$account->id}")
+            ->assertOk()
+            ->assertSee('possui lançamentos anteriores à data do saldo inicial');
+
+        $this->put("/accounts/{$account->id}", [
+            'name' => $account->name,
+            'institution' => '',
+            'type' => $account->type,
+            'color' => $account->color,
+            'opening_balance' => '100,00',
+            'opening_balance_date' => now()->toDateString(),
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('accounts', ['id' => $account->id, 'opening_balance_date' => now()->toDateString()]);
+    }
+
     public function test_financial_data_persists_after_logout_and_login(): void
     {
         $this->authenticated();
@@ -133,6 +210,7 @@ class FinanceFlowTest extends TestCase
             'type' => 'checking',
             'color' => '#111827',
             'opening_balance' => 10000,
+            'opening_balance_date' => now()->toDateString(),
         ]);
 
         $this->get("/accounts/{$otherAccount->id}")->assertNotFound();

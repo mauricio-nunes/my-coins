@@ -40,6 +40,7 @@ class AccountController extends Controller
             'transactions' => $transactions,
             'accounts' => collect($store->all('accounts'))->keyBy('id'),
             'categories' => collect($store->all('categories'))->keyBy('id'),
+            'hasTransactionsBeforeOpeningBalance' => $store->hasTransactionsBeforeOpeningBalance($account),
         ]);
     }
 
@@ -72,6 +73,7 @@ class AccountController extends Controller
             'type' => ['required', 'in:checking,savings,cash,investment'],
             'color' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'opening_balance' => ['required', 'regex:/^-?\d{1,9}([\.,]\d{1,2})?$/'],
+            'opening_balance_date' => ['required', 'date'],
         ]);
         $validated['opening_balance'] = Money::toCents($validated['opening_balance']);
         $validated['institution'] ??= '';

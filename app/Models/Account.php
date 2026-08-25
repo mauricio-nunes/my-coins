@@ -15,7 +15,11 @@ class Account extends Model
 
     protected function casts(): array
     {
-        return ['archived' => 'boolean', 'opening_balance' => 'integer'];
+        return [
+            'archived' => 'boolean',
+            'opening_balance' => 'integer',
+            'opening_balance_date' => 'date:Y-m-d',
+        ];
     }
 
     public function user(): BelongsTo

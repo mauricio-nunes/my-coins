@@ -29,10 +29,12 @@ class BrowserTestSeeder extends Seeder
             'must_change_password' => false,
             'password_changed_at' => now(),
         ]);
+        $today = CarbonImmutable::today();
+        $openingBalanceDate = $today->subMonth()->startOfMonth()->format('Y-m-d');
         $accounts = collect([
-            ['name' => 'Conta principal', 'institution' => 'Banco Aurora', 'type' => 'checking', 'color' => '#0f766e', 'opening_balance' => 725000],
-            ['name' => 'Reserva', 'institution' => 'Banco Horizonte', 'type' => 'savings', 'color' => '#2563eb', 'opening_balance' => 1850000],
-            ['name' => 'Carteira', 'institution' => 'Dinheiro', 'type' => 'cash', 'color' => '#d97706', 'opening_balance' => 18000],
+            ['name' => 'Conta principal', 'institution' => 'Banco Aurora', 'type' => 'checking', 'color' => '#0f766e', 'opening_balance' => 725000, 'opening_balance_date' => $openingBalanceDate],
+            ['name' => 'Reserva', 'institution' => 'Banco Horizonte', 'type' => 'savings', 'color' => '#2563eb', 'opening_balance' => 1850000, 'opening_balance_date' => $openingBalanceDate],
+            ['name' => 'Carteira', 'institution' => 'Dinheiro', 'type' => 'cash', 'color' => '#d97706', 'opening_balance' => 18000, 'opening_balance_date' => $openingBalanceDate],
         ])->map(fn (array $attributes): Account => Account::create($attributes + ['user_id' => $user->id]));
         DefaultCategories::createFor($user);
         $categories = Category::query()->where('user_id', $user->id)->get()->keyBy('name');
@@ -41,7 +43,6 @@ class BrowserTestSeeder extends Seeder
             'name' => $name,
             'normalized_name' => mb_strtolower($name),
         ]));
-        $today = CarbonImmutable::today();
         $rows = [
             ['Salário mensal', 'income', 780000, $today->subDays(12), 0, 'Trabalho', 0],
             ['Aluguel', 'expense', 235000, $today->subDays(10), 0, 'Moradia', 0],

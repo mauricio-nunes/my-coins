@@ -71,6 +71,24 @@ test('login, navigation and persisted transaction flow are usable', async ({ pag
   await expect(page.getByText(description)).toBeVisible()
 })
 
+test('account balance date is visible and saved', async ({ page }, testInfo) => {
+  const accountName = `Conta datada ${testInfo.project.name}`
+  await login(page)
+  await page.goto('/accounts/create')
+  const balanceDate = page.getByLabel('Data do saldo inicial')
+  await expect(balanceDate).not.toHaveValue('')
+  await expect(page.getByText('O saldo informado representa o início deste dia.')).toBeVisible()
+  await expect(page.getByText(/os saldos, a evolução e os indicadores podem não ser apresentados corretamente/i)).toBeVisible()
+  await page.getByLabel('Nome da conta').fill(accountName)
+  await page.getByLabel('Instituição').fill('Banco Exemplo')
+  await page.locator('#opening_balance').fill('500,00')
+  await balanceDate.fill('2026-08-15')
+  await page.getByRole('button', { name: 'Adicionar conta' }).click()
+
+  await expect(page.getByRole('heading', { name: accountName })).toBeVisible()
+  await expect(page.getByText('15/08/2026')).toBeVisible()
+})
+
 test('tags can be created inline, filtered and managed', async ({ page }, testInfo) => {
   const tagName = `Aprendizado ${testInfo.project.name.replace('-chromium', '')}`
   const renamedTag = `Estudos ${testInfo.project.name.replace('-chromium', '')}`
@@ -260,7 +278,7 @@ test('Inter OFX payment reaches the classification step as an expense', async ({
   await expect(row.getByText('R$ -45,90')).toBeVisible()
 })
 
-for (const path of ['/login', '/dashboard', '/transactions', '/transactions/import', '/transfers/create', '/categories', '/category-mappings', '/tags', '/budgets', '/reports']) {
+for (const path of ['/login', '/dashboard', '/transactions', '/transactions/import', '/transfers/create', '/accounts', '/accounts/create', '/categories', '/category-mappings', '/tags', '/budgets', '/reports']) {
   test(`${path} has no serious accessibility violations`, async ({ page }) => {
     if (path !== '/login') await login(page)
     await page.goto(path)

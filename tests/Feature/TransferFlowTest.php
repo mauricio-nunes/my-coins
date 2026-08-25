@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Account;
 use App\Services\FinanceStore;
 use Tests\TestCase;
 
@@ -58,6 +59,22 @@ class TransferFlowTest extends TestCase
         $this->assertSame($sourceBefore, $this->store()->balance(1));
         $this->assertSame($destinationBefore, $this->store()->balance(2));
         $this->get('/transactions/11')->assertOk()->assertSee('Aporte na reserva');
+    }
+
+    public function test_transfer_before_the_opening_balance_date_remains_allowed(): void
+    {
+        $this->authenticated();
+        Account::query()->whereIn('id', [1, 2])->update(['opening_balance_date' => now()->toDateString()]);
+
+        $this->post('/transfers', $this->payload(['date' => now()->subDay()->toDateString()]))
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('transactions', [
+            'type' => 'transfer',
+            'source_account_id' => 1,
+            'destination_account_id' => 2,
+            'date' => now()->subDay()->toDateString(),
+        ]);
     }
 
     public function test_future_income_and_expense_do_not_change_current_balance(): void

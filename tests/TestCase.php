@@ -36,10 +36,11 @@ abstract class TestCase extends BaseTestCase
     {
         $today = CarbonImmutable::today();
         $date = fn (int $daysAgo): string => $today->subDays($daysAgo)->format('Y-m-d');
+        $openingBalanceDate = $today->subMonth()->startOfMonth()->format('Y-m-d');
         $accounts = [
-            ['name' => 'Conta principal', 'institution' => 'Banco Aurora', 'type' => 'checking', 'color' => '#0f766e', 'opening_balance' => 725000],
-            ['name' => 'Reserva', 'institution' => 'Banco Horizonte', 'type' => 'savings', 'color' => '#2563eb', 'opening_balance' => 1850000],
-            ['name' => 'Carteira', 'institution' => 'Dinheiro', 'type' => 'cash', 'color' => '#d97706', 'opening_balance' => 18000],
+            ['name' => 'Conta principal', 'institution' => 'Banco Aurora', 'type' => 'checking', 'color' => '#0f766e', 'opening_balance' => 725000, 'opening_balance_date' => $openingBalanceDate],
+            ['name' => 'Reserva', 'institution' => 'Banco Horizonte', 'type' => 'savings', 'color' => '#2563eb', 'opening_balance' => 1850000, 'opening_balance_date' => $openingBalanceDate],
+            ['name' => 'Carteira', 'institution' => 'Dinheiro', 'type' => 'cash', 'color' => '#d97706', 'opening_balance' => 18000, 'opening_balance_date' => $openingBalanceDate],
         ];
         foreach ($accounts as $account) {
             Account::create($account + ['user_id' => $user->id, 'archived' => false]);
