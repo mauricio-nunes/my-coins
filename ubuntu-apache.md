@@ -135,7 +135,7 @@ Digite `EXIT;` depois do teste.
 
 ## 6. Preparar todo o build localmente
 
-Faça o release a partir de um commit revisado. Na raiz local do repositório:
+Faça o release a partir de um commit revisado. `git archive HEAD` empacota somente o último commit: alterações modificadas ou não rastreadas ficam de fora. Na raiz local do repositório:
 
 ```bash
 git status --short
@@ -143,26 +143,57 @@ make test
 make build
 ```
 
-Crie uma cópia limpa em diretório temporário. O PHP local deve ser 8.3:
+Se `git status --short` mostrar código que precisa ser publicado, revise e faça o commit antes de continuar.
+
+Crie uma cópia limpa em diretório temporário. O Composer será executado pelo container PHP 8.3 local do projeto; ele não precisa estar instalado no host nem existirá no servidor de produção:
 
 ```bash
+set -e
+
+test -z "$(git status --porcelain)" || {
+  echo "O repositório possui alterações não commitadas. Interrompendo o release."
+  exit 1
+}
+
 LOCAL_RELEASE_DIR="$(mktemp -d -t my-coins-ubuntu.XXXXXX)"
 git archive HEAD | tar -x -C "$LOCAL_RELEASE_DIR"
-composer --working-dir="$LOCAL_RELEASE_DIR" install \
-  --no-dev --prefer-dist --optimize-autoloader --no-interaction
+
+APP_UID="$(id -u)" APP_GID="$(id -g)" docker-compose run --rm --no-deps \
+  -v "$LOCAL_RELEASE_DIR:/release" \
+  app composer --working-dir=/release install \
+  --no-dev \
+  --prefer-dist \
+  --optimize-autoloader \
+  --no-interaction
+
 npm ci --prefix "$LOCAL_RELEASE_DIR"
 npm run build --prefix "$LOCAL_RELEASE_DIR"
+
 test -f "$LOCAL_RELEASE_DIR/vendor/autoload.php"
 test -f "$LOCAL_RELEASE_DIR/public/build/manifest.json"
 test ! -f "$LOCAL_RELEASE_DIR/public/hot"
+
 tar --exclude='./node_modules' --exclude='./tests' \
   -czf my-coins-release.tar.gz -C "$LOCAL_RELEASE_DIR" .
+
+tar -tzf my-coins-release.tar.gz | grep -Fx './vendor/autoload.php'
+tar -tzf my-coins-release.tar.gz | grep -Fx './public/build/manifest.json'
+
 sha256sum my-coins-release.tar.gz
+echo "Release criado e validado com sucesso."
 ```
 
-O pacote final contém PHP, `vendor/` e assets compilados. Ele não contém `.env`, `node_modules`, testes nem arquivos OFX ignorados pelo Git. Se existirem mudanças locais ainda não commitadas, elas não entrarão no `git archive`.
+O `set -e` encerra o processo na primeira falha. Os comandos `test` e a inspeção do `.tar.gz` impedem que um pacote sem `vendor/autoload.php` ou sem o manifesto do Vite seja publicado. O checksum só é calculado depois dessas validações.
 
-Você pode preparar o pacote dentro do ambiente Docker local do projeto, mas o pacote produzido é uma aplicação PHP comum e será executado sem Docker no Ubuntu.
+O pacote final contém PHP, `vendor/` e assets compilados. Ele não contém `.env`, `node_modules`, testes nem arquivos OFX ignorados pelo Git. Embora o Composer seja executado pelo Docker local, o pacote produzido é uma aplicação PHP comum e será executado sem Docker no Ubuntu.
+
+Se sua máquina usa Compose v2, substitua `docker-compose` por `docker compose`. Se a imagem local do serviço `app` ainda não existe, execute antes:
+
+```bash
+docker-compose build app
+```
+
+Não publique o arquivo se a mensagem `Release criado e validado com sucesso.` não for exibida. O aviso do Vite sobre chunks maiores que 500 kB é apenas informativo e não invalida o build.
 
 ## 7. Primeira transferência
 
