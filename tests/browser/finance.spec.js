@@ -17,6 +17,7 @@ ENCODING:USASCII
 CHARSET:1252
 
 <OFX>
+<BANKID>0237
 <CURDEF>BRL
 <BANKTRANLIST>
 <STMTTRN>
@@ -35,6 +36,20 @@ CHARSET:1252
 <CHECKNUM>PW-DEBIT-${checkNumberSuffix}
 <MEMO>Registro ignorado
 </STMTTRN>
+</BANKTRANLIST>
+</OFX>`
+
+const interOfx = fitIdSuffix => `OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+ENCODING:USASCII
+CHARSET:1252
+
+<OFX>
+<BANKID>077</BANKID>
+<CURDEF>BRL</CURDEF>
+<BANKTRANLIST>
+<STMTTRN><TRNTYPE>PAYMENT</TRNTYPE><DTPOSTED>20260805000000[-03:EST]</DTPOSTED><TRNAMT>-45.90</TRNAMT><FITID>INTER-${fitIdSuffix}</FITID><CHECKNUM>077</CHECKNUM><NAME>Pagamento</NAME><REFNUM>REF-${fitIdSuffix}</REFNUM><MEMO>Compra Inter importada</MEMO></STMTTRN>
 </BANKTRANLIST>
 </OFX>`
 
@@ -166,6 +181,7 @@ test('OFX wizard uploads, classifies and imports transactions', async ({ page },
   const label = `Importação ${testInfo.project.name.replace('-chromium', '')}`
   await login(page)
   await page.goto('/transactions/import')
+  await page.getByLabel('Banco do arquivo').selectOption('bradesco')
   await page.getByLabel('Conta').selectOption('1')
   const labelInput = page.locator('.ts-control input').first()
   await labelInput.fill(label)
@@ -201,6 +217,7 @@ test('OFX wizard uploads, classifies and imports transactions', async ({ page },
   await expect(page.getByText('Pagamento importado')).toBeVisible()
 
   await page.goto('/transactions/import')
+  await page.getByLabel('Banco do arquivo').selectOption('bradesco')
   await page.getByLabel('Conta').selectOption('1')
   const repeatedLabel = `${label} repetida`
   const repeatedLabelInput = page.locator('.ts-control input').first()
@@ -216,6 +233,31 @@ test('OFX wizard uploads, classifies and imports transactions', async ({ page },
   const duplicateRow = page.getByRole('row').filter({ hasText: 'Pagamento importado' })
   await expect(duplicateRow.getByText('Já importada')).toBeVisible()
   await expect(duplicateRow.getByLabel('Categoria de Pagamento importado')).toBeDisabled()
+})
+
+test('Inter OFX payment reaches the classification step as an expense', async ({ page }, testInfo) => {
+  const suffix = `PW-${testInfo.project.name.toUpperCase()}`
+  await login(page)
+  await page.goto('/transactions/import')
+  await page.getByLabel('Banco do arquivo').selectOption('inter')
+  await page.getByLabel('Conta').selectOption('1')
+  const labelInput = page.locator('.ts-control input').first()
+  await labelInput.fill(`Inter ${testInfo.project.name}`)
+  await page.locator('.ts-dropdown .create').click()
+  await labelInput.press('Escape')
+  await page.getByLabel('Arquivo OFX').setInputFiles({
+    name: 'inter.ofx',
+    mimeType: 'application/x-ofx',
+    buffer: Buffer.from(interOfx(suffix)),
+  })
+  await Promise.all([
+    page.waitForURL(/transactions\/import\/review/),
+    page.locator('form[action$="/preview"]').evaluate(form => form.submit()),
+  ])
+  await expect(page.getByText('Banco Inter', { exact: true })).toBeVisible()
+  const row = page.getByRole('row').filter({ hasText: 'Compra Inter importada' })
+  await expect(row.getByText('Despesa', { exact: true })).toBeVisible()
+  await expect(row.getByText('R$ -45,90')).toBeVisible()
 })
 
 for (const path of ['/login', '/dashboard', '/transactions', '/transactions/import', '/transfers/create', '/categories', '/category-mappings', '/tags', '/budgets', '/reports']) {

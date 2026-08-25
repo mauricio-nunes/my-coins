@@ -9,6 +9,7 @@
 @include('imports.steps', ['step' => 2])
 <div class="card border-0 shadow-sm mb-4"><div class="card-body d-flex flex-column flex-lg-row justify-content-between gap-3">
     <div><span class="text-body-secondary small d-block">Arquivo</span><strong>{{ $draft['file_name'] }}</strong></div>
+    <div><span class="text-body-secondary small d-block">Banco</span><strong>{{ $draft['bank_name'] }}</strong></div>
     <div><span class="text-body-secondary small d-block">Conta</span><strong>{{ $account['name'] }}</strong></div>
     <div><span class="text-body-secondary small d-block">Tag</span><span class="badge text-bg-light border fw-normal">#{{ $draft['label'] }}</span></div>
     <div><span class="text-body-secondary small d-block">Movimentações</span><strong>{{ count($draft['rows']) }}</strong></div>

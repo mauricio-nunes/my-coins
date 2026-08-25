@@ -131,6 +131,13 @@ class FinanceStore
 
     public function ofxDuplicateKey(int $accountId, array $transaction): string
     {
+        $bankFormat = strtolower(trim((string) ($transaction['_ofx_bank'] ?? $transaction['bank_format'] ?? 'bradesco')));
+        if ($bankFormat === 'inter') {
+            $fitId = Str::upper(trim((string) ($transaction['ofx_fitid'] ?? $transaction['fitid'] ?? '')));
+
+            return hash('sha256', implode('|', [$this->userId(), $accountId, 'inter', $fitId]));
+        }
+
         $checkNumber = Str::upper(trim((string) ($transaction['ofx_checknum'] ?? $transaction['checknum'] ?? '')));
         $description = Str::lower(Str::ascii((string) ($transaction['description'] ?? '')));
         $description = trim(preg_replace('/[^a-z0-9]+/', ' ', $description) ?? $description);
@@ -162,6 +169,7 @@ class FinanceStore
                     continue;
                 }
                 $attributes['active_ofx_key'] = $key;
+                unset($attributes['_ofx_bank'], $attributes['bank_format']);
                 try {
                     $imported[] = $this->create('transactions', $attributes + ['tag_ids' => [$tag->id]]);
                 } catch (UniqueConstraintViolationException) {

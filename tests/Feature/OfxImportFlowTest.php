@@ -160,6 +160,7 @@ class OfxImportFlowTest extends TestCase
         ]);
 
         $this->authenticated()->post('/transactions/import/preview', [
+            'bank_format' => 'bradesco',
             'account_id' => 2,
             'label' => 'Outra conta',
             'ofx_file' => UploadedFile::fake()->createWithContent('outra-conta.ofx', $this->ofx()),
@@ -214,6 +215,7 @@ class OfxImportFlowTest extends TestCase
         $this->get('/transactions/import')->assertRedirect('/login');
 
         $this->authenticated()->post('/transactions/import/preview', [
+            'bank_format' => 'bradesco',
             'account_id' => 999,
             'label' => 'Importação',
             'ofx_file' => UploadedFile::fake()->createWithContent('extrato.txt', $this->ofx()),
@@ -221,6 +223,7 @@ class OfxImportFlowTest extends TestCase
 
         $usd = str_replace('<CURDEF>BRL', '<CURDEF>USD', $this->ofx());
         $this->post('/transactions/import/preview', [
+            'bank_format' => 'bradesco',
             'account_id' => 1,
             'label' => 'Importação',
             'ofx_file' => UploadedFile::fake()->createWithContent('extrato.ofx', $usd),
@@ -228,6 +231,7 @@ class OfxImportFlowTest extends TestCase
 
         $missingCheckNumber = preg_replace('/<CHECKNUM>[^\r\n]+\R/', '', $this->ofx(), 1);
         $this->post('/transactions/import/preview', [
+            'bank_format' => 'bradesco',
             'account_id' => 1,
             'label' => 'Importação',
             'ofx_file' => UploadedFile::fake()->createWithContent('sem-checknum.ofx', $missingCheckNumber),
@@ -242,9 +246,53 @@ class OfxImportFlowTest extends TestCase
             ->assertRedirect('/transactions/import');
     }
 
-    private function uploadDraft(?string $contents = null): TestResponse
+    public function test_inter_uses_fitid_to_distinguish_similar_payments_and_detect_reimport(): void
+    {
+        $ofx = $this->interOfx();
+        $this->uploadDraft($ofx, 'inter');
+        $draft = session('my_coins.ofx_import_draft');
+
+        $this->assertSame('Banco Inter', $draft['bank_name']);
+        $this->assertSame('expense', $draft['rows'][0]['type']);
+        $this->assertFalse($draft['rows'][0]['duplicate']);
+        $this->assertFalse($draft['rows'][1]['duplicate']);
+
+        $this->post('/transactions/import', [
+            'draft_token' => $draft['token'],
+            'rows' => [
+                0 => ['category_id' => $this->categoryId('Alimentação')],
+                1 => ['category_id' => $this->categoryId('Alimentação')],
+            ],
+        ])->assertRedirect('/transactions/import/result');
+
+        $this->assertSame(2, session('my_coins.ofx_import_result.imported'));
+
+        $this->uploadDraft($ofx, 'inter');
+        $reimport = session('my_coins.ofx_import_draft');
+        $this->assertTrue($reimport['rows'][0]['duplicate']);
+        $this->assertTrue($reimport['rows'][1]['duplicate']);
+    }
+
+    public function test_upload_requires_the_bank_and_rejects_a_mismatched_format(): void
+    {
+        $this->authenticated()->post('/transactions/import/preview', [
+            'account_id' => 1,
+            'label' => 'Importação',
+            'ofx_file' => UploadedFile::fake()->createWithContent('extrato.ofx', $this->ofx()),
+        ])->assertSessionHasErrors(['bank_format']);
+
+        $this->post('/transactions/import/preview', [
+            'bank_format' => 'inter',
+            'account_id' => 1,
+            'label' => 'Importação',
+            'ofx_file' => UploadedFile::fake()->createWithContent('extrato.ofx', $this->ofx()),
+        ])->assertSessionHasErrors(['ofx_file']);
+    }
+
+    private function uploadDraft(?string $contents = null, string $bankFormat = 'bradesco'): TestResponse
     {
         return $this->authenticated()->post('/transactions/import/preview', [
+            'bank_format' => $bankFormat,
             'account_id' => 1,
             'label' => 'Extrato agosto',
             'ofx_file' => UploadedFile::fake()->createWithContent('agosto.ofx', $contents ?? $this->ofx()),
@@ -262,6 +310,7 @@ ENCODING:USASCII
 CHARSET:1252
 
 <OFX>
+<BANKID>0237
 <CURDEF>BRL
 <BANKTRANLIST>
 <STMTTRN>
@@ -280,6 +329,26 @@ CHARSET:1252
 <CHECKNUM>DEBIT-CHECK-001
 <MEMO>Reserva mensal
 </STMTTRN>
+</BANKTRANLIST>
+</OFX>
+OFX;
+    }
+
+    private function interOfx(): string
+    {
+        return <<<'OFX'
+OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+ENCODING:USASCII
+CHARSET:1252
+
+<OFX>
+<BANKID>077</BANKID>
+<CURDEF>BRL</CURDEF>
+<BANKTRANLIST>
+<STMTTRN><TRNTYPE>PAYMENT</TRNTYPE><DTPOSTED>20260805000000[-03:EST]</DTPOSTED><TRNAMT>-75.00</TRNAMT><FITID>INTER-001</FITID><CHECKNUM>077</CHECKNUM><NAME>Compra</NAME><REFNUM>REF-001</REFNUM><MEMO>Compra semelhante</MEMO></STMTTRN>
+<STMTTRN><TRNTYPE>PAYMENT</TRNTYPE><DTPOSTED>20260805000000[-03:EST]</DTPOSTED><TRNAMT>-75.00</TRNAMT><FITID>INTER-002</FITID><CHECKNUM>077</CHECKNUM><NAME>Compra</NAME><REFNUM>REF-002</REFNUM><MEMO>Compra semelhante</MEMO></STMTTRN>
 </BANKTRANLIST>
 </OFX>
 OFX;
