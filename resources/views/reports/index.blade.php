@@ -3,8 +3,24 @@
 @section('eyebrow', 'ANÁLISE')
 @section('page_title', 'Relatórios financeiros')
 @section('page_subtitle', 'Encontre padrões e entenda seus resultados por período.')
+@php
+    $tagFilterConfig = json_encode([
+        'plugins' => ['remove_button'],
+        'placeholder' => 'Filtrar por tags...',
+        'items' => array_map('strval', $filters['tags'] ?? []),
+    ]);
+@endphp
 @section('page_content')
-<div class="card border-0 shadow-sm mb-4"><div class="card-body"><form method="get" class="row g-3 align-items-end"><div class="col-sm-6 col-xl-2"><label for="from" class="form-label">De</label><input id="from" type="date" name="from" value="{{ $filters['from']??'' }}" class="form-control"></div><div class="col-sm-6 col-xl-2"><label for="to" class="form-label">Até</label><input id="to" type="date" name="to" value="{{ $filters['to']??'' }}" class="form-control"></div><div class="col-md-5 col-xl-3"><label for="account_id" class="form-label">Conta</label><select id="account_id" name="account_id" class="form-select"><option value="">Todas</option>@foreach($accounts as $account)<option value="{{ $account['id'] }}" @selected(($filters['account_id']??'')==$account['id'])>{{ $account['name'] }}</option>@endforeach</select></div><div class="col-md-5 col-xl-3"><label for="category_id" class="form-label">Categoria</label><select id="category_id" name="category_id" class="form-select"><option value="">Todas</option>@foreach($categories as $category)<option value="{{ $category['id'] }}" @selected(($filters['category_id']??'')==$category['id'])>{{ $category['name'] }}</option>@endforeach</select></div><div class="col-md-2 col-xl-2 d-grid"><button class="btn btn-primary"><i class="bi bi-funnel me-1"></i> Filtrar</button></div></form></div></div>
+<div class="card border-0 shadow-sm mb-4"><div class="card-body">
+    <form method="get" class="row g-3 align-items-end">
+        <div class="col-sm-6 col-xl-2"><label for="from" class="form-label">De</label><input id="from" type="date" name="from" value="{{ $filters['from'] ?? '' }}" class="form-control"></div>
+        <div class="col-sm-6 col-xl-2"><label for="to" class="form-label">Até</label><input id="to" type="date" name="to" value="{{ $filters['to'] ?? '' }}" class="form-control"></div>
+        <div class="col-md-6 col-xl-2"><label for="account_id" class="form-label">Conta</label><select id="account_id" name="account_id" class="form-select"><option value="">Todas</option>@foreach($accounts as $account)<option value="{{ $account['id'] }}" @selected(($filters['account_id'] ?? '') == $account['id'])>{{ $account['name'] }}</option>@endforeach</select></div>
+        <div class="col-md-6 col-xl-2"><label for="category_id" class="form-label">Categoria</label><select id="category_id" name="category_id" class="form-select"><option value="">Todas</option>@foreach($categories as $category)<option value="{{ $category['id'] }}" @selected(($filters['category_id'] ?? '') == $category['id'])>{{ $category['name'] }}</option>@endforeach</select></div>
+        <div class="col-md-9 col-xl-3"><label for="tags" class="form-label">Tags <span class="text-body-secondary fw-normal">(todas)</span></label><select id="tags" name="tags[]" multiple aria-label="Filtrar relatório por tags" class="form-select" data-tom-select data-tom-select-config="{{ $tagFilterConfig }}"><option value=""></option>@foreach($tags as $tag)<option value="{{ $tag['id'] }}" @selected(in_array((string) $tag['id'], array_map('strval', $filters['tags'] ?? []), true))>{{ $tag['name'] }}</option>@endforeach</select></div>
+        <div class="col-md-3 col-xl-1 d-grid"><button class="btn btn-primary"><i class="bi bi-funnel me-1"></i> Filtrar</button></div>
+    </form>
+</div></div>
 
 <div class="row g-3 mb-4">@foreach([['Receitas',$report['income'],'success'],['Despesas',$report['expenses'],'danger'],['Resultado',$report['result'],$report['result']>=0?'primary':'warning']] as [$label,$value,$theme])<div class="col-md-4"><div class="card border-0 shadow-sm"><div class="card-body"><span class="small text-body-secondary">{{ $label }}</span><div class="h3 mt-2 mb-0 text-{{ $theme }}"><x-money :value="$value" /></div></div></div></div>@endforeach</div>
 

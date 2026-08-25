@@ -16,9 +16,11 @@ class ReportController extends Controller
             'to' => ['nullable', 'date', 'after_or_equal:from'],
             'account_id' => ['nullable', 'integer'],
             'category_id' => ['nullable', 'integer'],
+            'tags' => ['nullable', 'array', 'max:10'],
+            'tags.*' => ['integer'],
         ]);
 
-        $report = $store->report($filters);
+        $report = $store->report($filters + ['tag_ids' => $filters['tags'] ?? []]);
         $trendChart = [
             'chart' => ['type' => 'area', 'height' => 320, 'toolbar' => ['show' => false]],
             'series' => [
@@ -41,6 +43,7 @@ class ReportController extends Controller
             'filters' => $filters,
             'accounts' => collect($store->all('accounts')),
             'categories' => collect($store->all('categories')),
+            'tags' => collect($store->all('tags'))->sortBy('name')->values(),
             'trendChart' => $trendChart,
             'categoryChart' => $categoryChart,
         ]);
