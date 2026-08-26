@@ -550,15 +550,29 @@ php artisan mycoins:reset-password
 
 Guarde a senha temporária exibida e altere-a no próximo login.
 
-## 16. Filas e tarefas futuras
+## 16. Scheduler e filas
 
-O projeto atual pode usar `QUEUE_CONNECTION=sync` e não exige daemon. Se futuramente houver jobs assíncronos, configure um serviço `systemd` para `queue:work`. Se forem implementadas recorrências automáticas, adicione o scheduler:
+As transações recorrentes dependem do Laravel Scheduler para manter a projeção dos próximos 12 meses. Edite o crontab do usuário que executa a aplicação:
+
+```bash
+sudo crontab -u www-data -e
+```
+
+Adicione:
 
 ```cron
 * * * * * cd /var/www/my-coins && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-Não adicione worker ou cron antes de existir funcionalidade que dependa deles.
+Valide o comando e a agenda:
+
+```bash
+cd /var/www/my-coins
+sudo -u www-data php artisan mycoins:generate-recurrences
+sudo -u www-data php artisan schedule:list
+```
+
+O projeto usa `QUEUE_CONNECTION=sync` e não exige `queue:work`. Se futuramente houver jobs assíncronos, configure um serviço `systemd` separado para a fila.
 
 ## Referências
 

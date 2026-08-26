@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Finance;
 
 use App\Http\Controllers\Controller;
 use App\Services\FinanceStore;
+use App\Services\RecurringTransactionService;
 use App\Support\Money;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class AccountController extends Controller
@@ -57,12 +59,21 @@ class AccountController extends Controller
         return redirect()->route('accounts.show', $account)->with('success', 'Conta atualizada com sucesso.');
     }
 
-    public function destroy(int $account, FinanceStore $store): RedirectResponse
+    public function destroy(int $account, FinanceStore $store, RecurringTransactionService $recurrences): RedirectResponse
     {
         abort_unless($store->find('accounts', $account), 404);
-        $store->update('accounts', $account, ['archived' => true]);
+        $paused = DB::transaction(function () use ($store, $recurrences, $account): int {
+            $store->update('accounts', $account, ['archived' => true]);
 
-        return redirect()->route('accounts.index')->with('success', 'Conta arquivada. O histórico foi preservado.');
+            return $recurrences->pauseForAccount(auth()->id(), $account);
+        });
+
+        $message = 'Conta arquivada. O histórico foi preservado.';
+        if ($paused > 0) {
+            $message .= " {$paused} recorrência(s) foram pausadas e as ocorrências futuras removidas.";
+        }
+
+        return redirect()->route('accounts.index')->with('success', $message);
     }
 
     private function validated(Request $request): array

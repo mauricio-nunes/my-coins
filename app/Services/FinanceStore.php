@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\Budget;
 use App\Models\Category;
 use App\Models\CategoryKeyword;
+use App\Models\RecurringTransaction;
 use App\Models\Tag;
 use App\Models\Transaction;
 use Carbon\CarbonImmutable;
@@ -199,7 +200,7 @@ class FinanceStore
     {
         $tag = Tag::query()->where('user_id', $this->userId())->find($id);
 
-        return $tag ? $tag->transactions()->count() : 0;
+        return $tag ? $tag->transactions()->count() + $tag->recurringTransactions()->count() : 0;
     }
 
     public function renameTag(int $id, string $name): ?array
@@ -216,6 +217,7 @@ class FinanceStore
 
         return DB::transaction(function () use ($tag): bool {
             $tag->transactions()->detach();
+            $tag->recurringTransactions()->detach();
 
             return (bool) $tag->delete();
         });
@@ -305,7 +307,8 @@ class FinanceStore
     public function categoryIsUsed(int $id): bool
     {
         return Transaction::query()->where('user_id', $this->userId())->where('category_id', $id)->exists()
-            || Budget::query()->where('user_id', $this->userId())->where('category_id', $id)->exists();
+            || Budget::query()->where('user_id', $this->userId())->where('category_id', $id)->exists()
+            || RecurringTransaction::query()->where('user_id', $this->userId())->where('category_id', $id)->where('status', 'active')->exists();
     }
 
     public function automaticCategorizationCategories(): Collection

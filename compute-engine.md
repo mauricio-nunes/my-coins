@@ -320,6 +320,20 @@ services:
       start_period: 20s
     mem_limit: 320m
 
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      target: runtime
+    command: php artisan schedule:work
+    env_file:
+      - .env.production
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    mem_limit: 128m
+
   mysql:
     image: mysql:8.4
     env_file:

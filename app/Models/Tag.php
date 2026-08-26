@@ -23,4 +23,9 @@ class Tag extends Model
     {
         return $this->belongsToMany(Transaction::class);
     }
+
+    public function recurringTransactions(): BelongsToMany
+    {
+        return $this->belongsToMany(RecurringTransaction::class);
+    }
 }

@@ -7,7 +7,7 @@ export APP_UID APP_GID
 .PHONY: setup fix-permissions clean-containers up down build test format e2e debug reset
 
 setup:
-	$(COMPOSE) build app
+	$(COMPOSE) build app scheduler
 	$(COMPOSE) up -d mysql
 	$(MAKE) fix-permissions
 	$(COMPOSE) run --rm app composer install
@@ -23,10 +23,10 @@ fix-permissions:
 	$(COMPOSE) run --rm --user 0:0 vite chown -R $(APP_UID):$(APP_GID) /var/www/html/node_modules /var/www/html/public/build
 
 clean-containers:
-	$(COMPOSE) rm -sf app vite
+	$(COMPOSE) rm -sf app vite scheduler
 
 up: clean-containers
-	$(COMPOSE) up app vite mysql
+	$(COMPOSE) up app vite scheduler mysql
 
 down:
 	$(COMPOSE) down
@@ -53,7 +53,7 @@ e2e:
 	$(COMPOSE) rm -sf app
 
 debug: clean-containers
-	XDEBUG_MODE=debug $(COMPOSE) up app vite
+	XDEBUG_MODE=debug $(COMPOSE) up app vite scheduler mysql
 
 reset:
 	$(COMPOSE) run --rm app php artisan optimize:clear

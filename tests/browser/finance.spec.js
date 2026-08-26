@@ -94,6 +94,29 @@ test('account balance date is visible and saved', async ({ page }, testInfo) => 
   await expect(page.getByText('15/08/2026')).toBeVisible()
 })
 
+test('recurring expense creates and exposes future occurrences', async ({ page }, testInfo) => {
+  const description = `Academia recorrente ${testInfo.project.name}`
+  await login(page)
+  await page.goto('/transactions/create')
+  await page.getByLabel('Descrição').fill(description)
+  await page.getByLabel('Valor').fill('129,90')
+  await page.locator('#date').fill('2026-09-05')
+  await page.getByLabel('Conta').selectOption('1')
+  await page.getByLabel('Categoria').selectOption({ label: 'Saúde e cuidados pessoais' })
+  await page.getByLabel('Repetir transação').check()
+  await expect(page.getByLabel('Frequência')).toBeVisible()
+  await page.getByLabel('Frequência').selectOption('monthly')
+  await page.getByLabel('Data final').fill('2026-12-05')
+  await page.getByRole('button', { name: 'Adicionar transação' }).click()
+
+  await expect(page.getByText('Mensal', { exact: true })).toBeVisible()
+  await page.goto('/recurrences')
+  const row = page.getByRole('row').filter({ hasText: description })
+  await expect(row).toContainText('Mensal')
+  await expect(row).toContainText('Ativa')
+  await expect(row).toContainText('05/09/2026')
+})
+
 test('tags can be created inline, filtered and managed', async ({ page }, testInfo) => {
   const tagName = `Aprendizado ${testInfo.project.name.replace('-chromium', '')}`
   const renamedTag = `Estudos ${testInfo.project.name.replace('-chromium', '')}`
@@ -283,7 +306,7 @@ test('Inter OFX payment reaches the classification step as an expense', async ({
   await expect(row.getByText('R$ -45,90')).toBeVisible()
 })
 
-for (const path of ['/login', '/dashboard', '/transactions', '/transactions/import', '/transfers/create', '/accounts', '/accounts/create', '/categories', '/category-mappings', '/tags', '/budgets', '/reports']) {
+for (const path of ['/login', '/dashboard', '/transactions', '/transactions/import', '/transfers/create', '/recurrences', '/accounts', '/accounts/create', '/categories', '/category-mappings', '/tags', '/budgets', '/reports']) {
   test(`${path} has no serious accessibility violations`, async ({ page }) => {
     if (path !== '/login') await login(page)
     await page.goto(path)
