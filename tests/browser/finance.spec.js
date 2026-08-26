@@ -57,6 +57,11 @@ test('login, navigation and persisted transaction flow are usable', async ({ pag
   const description = `Café com amigos ${testInfo.project.name}`
   await login(page)
   await expect(page.getByRole('heading', { name: /Sua vida financeira/i })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Fluxo de caixa diário' })).toBeVisible()
+  const dailyChart = page.locator('[data-apexchart-currency="BRL"]')
+  await expect(dailyChart).toHaveAttribute('data-apexchart-ready', 'true')
+  await expect(dailyChart.locator('.apexcharts-bar-series .apexcharts-series')).toHaveCount(2)
+  await expect(dailyChart.locator('.apexcharts-line-series .apexcharts-series')).toHaveCount(1)
   await page.getByRole('link', { name: /Nova transação/i }).click()
   await page.getByLabel('Descrição').fill(description)
   await page.getByLabel('Valor').fill('25,90')

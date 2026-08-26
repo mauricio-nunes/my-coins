@@ -272,6 +272,36 @@ class FinanceStore
         ];
     }
 
+    public function dailyCashFlow(?CarbonImmutable $referenceDate = null): Collection
+    {
+        $monthStart = ($referenceDate ?? CarbonImmutable::now())->startOfMonth();
+        $monthEnd = $monthStart->endOfMonth();
+        $accounts = collect($this->all('accounts'))->where('archived', false)->values();
+        $accountIds = $accounts->pluck('id')->map(fn (int $id): int => $id)->all();
+        $transactions = $this->transactions(['to' => $monthEnd->toDateString()]);
+        $monthlyTransactions = $transactions->filter(
+            fn (array $transaction): bool => $transaction['date'] >= $monthStart->toDateString()
+                && in_array($transaction['account_id'], $accountIds, true),
+        );
+        $balance = $this->consolidatedBalanceAt($accounts, $transactions, $monthStart->subDay());
+        $points = collect();
+
+        for ($date = $monthStart; $date->lte($monthEnd); $date = $date->addDay()) {
+            $daily = $monthlyTransactions->where('date', $date->toDateString());
+            $income = $daily->where('type', 'income')->sum('amount');
+            $expenses = $daily->where('type', 'expense')->sum('amount');
+            $balance += $income - $expenses;
+            $points->push([
+                'date' => $date->toDateString(),
+                'income' => $income,
+                'expense' => $expenses,
+                'balance' => $balance,
+            ]);
+        }
+
+        return $points;
+    }
+
     public function categoryIsUsed(int $id): bool
     {
         return Transaction::query()->where('user_id', $this->userId())->where('category_id', $id)->exists()
@@ -415,6 +445,22 @@ class FinanceStore
         }
 
         return $transaction['type'] === 'income' ? $transaction['amount'] : -$transaction['amount'];
+    }
+
+    private function consolidatedBalanceAt(Collection $accounts, Collection $transactions, CarbonImmutable $date): int
+    {
+        $requestedDate = $date->toDateString();
+
+        return $accounts->sum(function (array $account) use ($transactions, $requestedDate): int {
+            if ($requestedDate < $account['opening_balance_date']) {
+                return 0;
+            }
+
+            return (int) $account['opening_balance'] + $transactions
+                ->where('date', '>=', $account['opening_balance_date'])
+                ->where('date', '<=', $requestedDate)
+                ->sum(fn (array $transaction): int => $this->transactionEffect($transaction, $account['id']));
+        });
     }
 
     private function query(string $resource): Builder

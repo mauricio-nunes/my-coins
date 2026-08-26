@@ -52,6 +52,17 @@ function initCharts() {
   document.querySelectorAll('[data-apexchart]').forEach((el) => {
     if (el.dataset.apexchartReady) return
     const config = parseConfig(el, 'data-apexchart-config')
+    if (el.dataset.apexchartCurrency === 'BRL') {
+      const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+      config.yaxis = {
+        ...(config.yaxis || {}),
+        labels: { ...(config.yaxis?.labels || {}), formatter: value => currency.format(value) },
+      }
+      config.tooltip = {
+        ...(config.tooltip || {}),
+        y: { ...(config.tooltip?.y || {}), formatter: value => currency.format(value) },
+      }
+    }
     try {
       new window.ApexCharts(el, config).render()
       el.dataset.apexchartReady = 'true'
