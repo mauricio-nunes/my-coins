@@ -18,6 +18,7 @@
     <div class="transaction-hero rounded-3 p-4 mb-4"><span class="badge {{ $isTransfer ? 'text-bg-primary' : ($transaction['type'] === 'income' ? 'text-bg-success' : 'text-bg-danger') }} mb-3">{{ $isTransfer ? 'Transferência' : ($transaction['type'] === 'income' ? 'Receita' : 'Despesa') }}</span><div class="display-6 fw-semibold {{ $isTransfer ? 'text-body' : ($transaction['type'] === 'income' ? 'text-success' : 'text-danger') }}">@if($isTransfer)<x-money :value="$transaction['amount']" />@else<x-money :value="($transaction['type'] === 'income' ? 1 : -1) * $transaction['amount']" :signed="true" />@endif</div></div>
     <dl class="row detail-list mb-0">
         <dt class="col-sm-4">Data efetiva</dt><dd class="col-sm-8">{{ \Carbon\Carbon::parse($transaction['date'])->format('d/m/Y') }}</dd>
+        <dt class="col-sm-4">Conciliação</dt><dd class="col-sm-8"><span class="badge {{ $transaction['reconciled'] ? 'text-bg-success-subtle text-success' : 'bg-warning-subtle text-warning-emphasis border border-warning-subtle' }}"><i class="bi {{ $transaction['reconciled'] ? 'bi-check2-circle' : 'bi-circle' }} me-1"></i>{{ $transaction['reconciled'] ? 'Conciliada' : 'Pendente' }}</span></dd>
         @if($isTransfer)
             <dt class="col-sm-4">Conta de origem</dt><dd class="col-sm-8">{{ $source['name'] }} · {{ $source['institution'] }}</dd>
             <dt class="col-sm-4">Conta de destino</dt><dd class="col-sm-8">{{ $destination['name'] }} · {{ $destination['institution'] }}</dd>

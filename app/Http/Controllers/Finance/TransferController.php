@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Finance;
 use App\Http\Controllers\Controller;
 use App\Services\FinanceStore;
 use App\Support\Money;
+use App\Support\TransactionListReturn;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -32,7 +33,7 @@ class TransferController extends Controller
         return redirect()->route('transactions.show', $transfer['id'])->with('success', 'Transferência registrada com sucesso.');
     }
 
-    public function edit(int $transfer, FinanceStore $store): View
+    public function edit(Request $request, int $transfer, FinanceStore $store): View
     {
         $item = $store->find('transactions', $transfer) ?? abort(404);
         abort_unless($item['type'] === 'transfer', 404);
@@ -41,6 +42,7 @@ class TransferController extends Controller
             'transfer' => $item,
             'accounts' => $this->accounts($store, $item),
             'defaultSourceId' => null,
+            'returnTo' => TransactionListReturn::from($request),
         ]);
     }
 
@@ -50,7 +52,10 @@ class TransferController extends Controller
         abort_unless($item['type'] === 'transfer', 404);
         $store->update('transactions', $transfer, $this->validated($request, $store, $item));
 
-        return redirect()->route('transactions.show', $transfer)->with('success', 'Transferência atualizada com sucesso.');
+        $returnTo = TransactionListReturn::from($request);
+
+        return ($returnTo ? redirect()->to($returnTo) : redirect()->route('transactions.show', $transfer))
+            ->with('success', 'Transferência atualizada com sucesso.');
     }
 
     private function validated(Request $request, FinanceStore $store, ?array $existing = null): array
@@ -61,6 +66,7 @@ class TransferController extends Controller
             'amount' => ['required', 'regex:/^\d{1,9}([\.,]\d{1,2})?$/'],
             'date' => ['required', 'date'],
             'description' => ['nullable', 'string', 'max:120'],
+            'reconciled' => ['nullable', 'boolean'],
         ]);
         $sourceId = (int) $validated['source_account_id'];
         $destinationId = (int) $validated['destination_account_id'];
@@ -89,6 +95,7 @@ class TransferController extends Controller
             'account_id' => null,
             'category_id' => null,
             'notes' => '',
+            'reconciled' => $request->boolean('reconciled'),
             'tag_ids' => [],
         ];
     }

@@ -20,6 +20,7 @@ class Transaction extends Model
             'amount' => 'integer',
             'date' => 'date:Y-m-d',
             'recurrence_date' => 'date:Y-m-d',
+            'reconciled' => 'boolean',
             'imported_at' => 'datetime',
         ];
     }

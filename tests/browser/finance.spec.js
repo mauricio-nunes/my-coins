@@ -186,6 +186,62 @@ test('transactions can be filtered by category', async ({ page }) => {
   expect(accessibility.violations.filter(v => ['serious', 'critical'].includes(v.impact))).toEqual([])
 })
 
+test('transactions can be reconciled while preserving list filters', async ({ page }, testInfo) => {
+  const description = `Conciliação rápida ${testInfo.project.name}`
+  await login(page)
+  await page.goto('/transactions/create')
+  await page.getByLabel('Descrição').fill(description)
+  await page.getByLabel('Valor').fill('49,90')
+  await page.getByLabel('Conta').selectOption('1')
+  await page.getByLabel('Categoria').selectOption({ label: 'Alimentação' })
+  await page.getByLabel('Transação conciliada').check()
+  await page.getByRole('button', { name: /Adicionar transação/i }).click()
+  await expect(page.getByText('Conciliada', { exact: true })).toBeVisible()
+
+  await page.goto(`/transactions?search=${encodeURIComponent(description)}&reconciled=yes`)
+  const filteredUrl = page.url()
+  let row = page.getByRole('row').filter({ hasText: description })
+  await expect(row).toContainText('Conciliada')
+  await row.getByRole('button', { name: new RegExp(`Desfazer conciliação de ${description}`, 'i') }).click()
+  await expect(page).toHaveURL(filteredUrl)
+  await expect(page.getByText(description)).toHaveCount(0)
+
+  await page.goto(`/transactions?search=${encodeURIComponent(description)}&reconciled=no`)
+  const pendingUrl = page.url()
+  row = page.getByRole('row').filter({ hasText: description })
+  await page.evaluate(() => document.documentElement.setAttribute('data-bs-theme', 'dark'))
+  const pendingBadge = row.getByText('Pendente', { exact: true })
+  const contrastRatio = await pendingBadge.evaluate(element => {
+    const parseColor = value => value.match(/[\d.]+/g).slice(0, 3).map(Number)
+    const luminance = color => {
+      const channels = color.map(value => {
+        const normalized = value / 255
+        return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4
+      })
+      return (0.2126 * channels[0]) + (0.7152 * channels[1]) + (0.0722 * channels[2])
+    }
+    const styles = getComputedStyle(element)
+    const foreground = luminance(parseColor(styles.color))
+    const background = luminance(parseColor(styles.backgroundColor))
+    return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05)
+  })
+  expect(contrastRatio).toBeGreaterThanOrEqual(4.5)
+  await row.getByRole('link', { name: new RegExp(`Editar ${description}`, 'i') }).click()
+  await expect(page.getByLabel('Transação conciliada')).not.toBeChecked()
+  await page.getByRole('link', { name: 'Cancelar' }).last().click()
+  await expect(page).toHaveURL(pendingUrl)
+
+  row = page.getByRole('row').filter({ hasText: description })
+  await row.getByRole('link', { name: new RegExp(`Editar ${description}`, 'i') }).click()
+  await page.getByLabel('Transação conciliada').check()
+  await page.getByRole('button', { name: 'Salvar alterações' }).click()
+  await expect(page).toHaveURL(pendingUrl)
+  await expect(page.getByText(description)).toHaveCount(0)
+
+  const accessibility = await new AxeBuilder({ page }).disableRules(['color-contrast']).analyze()
+  expect(accessibility.violations.filter(v => ['serious', 'critical'].includes(v.impact))).toEqual([])
+})
+
 test('transfer menu opens the dedicated linked-account flow', async ({ page }) => {
   await login(page)
   if ((page.viewportSize()?.width || 0) < 992) {

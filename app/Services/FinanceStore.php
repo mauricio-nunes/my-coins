@@ -116,6 +116,9 @@ class FinanceStore
             });
         });
         $query->when($filters['category_id'] ?? null, fn (Builder $query, mixed $id): Builder => $query->where('category_id', (int) $id));
+        if (isset($filters['reconciled'])) {
+            $query->where('reconciled', $filters['reconciled'] === 'yes');
+        }
         $query->when($filters['from'] ?? null, fn (Builder $query, string $date): Builder => $query->whereDate('date', '>=', $date));
         $query->when($filters['to'] ?? null, fn (Builder $query, string $date): Builder => $query->whereDate('date', '<=', $date));
         foreach (array_unique(array_map('intval', $filters['tag_ids'] ?? [])) as $tagId) {
