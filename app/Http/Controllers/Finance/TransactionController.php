@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Finance;
 
 use App\Http\Controllers\Controller;
 use App\Services\FinanceStore;
+use App\Services\RecurringTransactionService;
 use App\Support\Money;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -37,44 +38,87 @@ class TransactionController extends Controller
 
     public function create(FinanceStore $store): View
     {
-        return view('transactions.form', $this->formData($store) + ['transaction' => null]);
+        return view('transactions.form', $this->formData($store) + ['transaction' => null, 'recurrence' => null]);
     }
 
-    public function store(Request $request, FinanceStore $store): RedirectResponse
+    public function store(Request $request, FinanceStore $store, RecurringTransactionService $recurrences): RedirectResponse
     {
-        $transaction = $store->create('transactions', $this->validated($request, $store));
+        $attributes = $this->validated($request, $store);
+        $recurrence = $this->validatedRecurrence($request, false);
+        $transaction = $recurrence
+            ? $store->find('transactions', $recurrences->create(auth()->id(), $attributes, $recurrence['frequency'], $recurrence['end_date'])->id)
+            : $store->create('transactions', $attributes);
 
-        return redirect()->route('transactions.show', $transaction['id'])->with('success', 'Transação adicionada com sucesso.');
+        return redirect()->route('transactions.show', $transaction['id'])->with(
+            'success',
+            $recurrence ? 'Transação recorrente criada e próximas ocorrências agendadas.' : 'Transação adicionada com sucesso.',
+        );
     }
 
-    public function show(int $transaction, FinanceStore $store): View
+    public function show(int $transaction, FinanceStore $store, RecurringTransactionService $recurrences): View
     {
         $item = $store->find('transactions', $transaction) ?? abort(404);
+        $recurrence = $item['recurring_transaction_id']
+            ? $recurrences->findForUser(auth()->id(), $item['recurring_transaction_id'])
+            : null;
 
-        return view('transactions.show', $this->formData($store, true) + ['transaction' => $item]);
+        return view('transactions.show', $this->formData($store, true) + ['transaction' => $item, 'recurrence' => $recurrence]);
     }
 
-    public function edit(int $transaction, FinanceStore $store): View|RedirectResponse
-    {
+    public function edit(
+        int $transaction,
+        FinanceStore $store,
+        RecurringTransactionService $recurrences,
+    ): View|RedirectResponse {
         $item = $store->find('transactions', $transaction) ?? abort(404);
         if ($item['type'] === 'transfer') {
             return redirect()->route('transfers.edit', $transaction);
         }
 
-        return view('transactions.form', $this->formData($store) + ['transaction' => $item]);
+        $recurrence = $item['recurring_transaction_id']
+            ? $recurrences->findForUser(auth()->id(), $item['recurring_transaction_id'])
+            : null;
+
+        return view('transactions.form', $this->formData($store) + compact('recurrence') + ['transaction' => $item]);
     }
 
-    public function update(Request $request, int $transaction, FinanceStore $store): RedirectResponse
-    {
+    public function update(
+        Request $request,
+        int $transaction,
+        FinanceStore $store,
+        RecurringTransactionService $recurrences,
+    ): RedirectResponse {
         $existing = $store->find('transactions', $transaction) ?? abort(404);
         abort_if($existing['type'] === 'transfer', 404);
-        $store->update('transactions', $transaction, $this->validated($request, $store));
+        $attributes = $this->validated($request, $store);
+        if ($existing['recurring_transaction_id'] && $request->input('recurrence_scope', 'single') === 'future') {
+            $recurrence = $this->validatedRecurrence($request, true);
+            $recurrences->updateThisAndFuture(
+                auth()->id(),
+                $transaction,
+                $attributes,
+                $recurrence['frequency'],
+                $recurrence['end_date'],
+            );
+        } else {
+            $store->update('transactions', $transaction, $attributes);
+        }
 
         return redirect()->route('transactions.show', $transaction)->with('success', 'Transação atualizada com sucesso.');
     }
 
-    public function destroy(int $transaction, FinanceStore $store): RedirectResponse
-    {
+    public function destroy(
+        Request $request,
+        int $transaction,
+        FinanceStore $store,
+        RecurringTransactionService $recurrences,
+    ): RedirectResponse {
+        $existing = $store->find('transactions', $transaction) ?? abort(404);
+        if ($existing['recurring_transaction_id'] && $request->input('recurrence_scope') === 'future') {
+            abort_unless($recurrences->cancelFromOccurrence(auth()->id(), $transaction), 404);
+
+            return redirect()->route('transactions.index')->with('success', 'Esta ocorrência e as próximas foram canceladas. O histórico foi preservado.');
+        }
         abort_unless($store->delete('transactions', $transaction), 404);
 
         return redirect()->route('transactions.index')->with('success', 'Transação excluída. O registro foi preservado para auditoria.');
@@ -118,6 +162,24 @@ class TransactionController extends Controller
         unset($validated['tags']);
 
         return $validated;
+    }
+
+    private function validatedRecurrence(Request $request, bool $required): ?array
+    {
+        if (! $required && ! $request->boolean('recurring')) {
+            return null;
+        }
+
+        $validated = $request->validate([
+            'frequency' => ['required', 'in:weekly,monthly,yearly'],
+            'recurrence_end_date' => ['nullable', 'date', 'after_or_equal:date'],
+            'recurrence_scope' => [$required ? 'required' : 'nullable', 'in:single,future'],
+        ]);
+
+        return [
+            'frequency' => $validated['frequency'],
+            'end_date' => $validated['recurrence_end_date'] ?? null,
+        ];
     }
 
     private function formData(FinanceStore $store, bool $includeArchived = false): array

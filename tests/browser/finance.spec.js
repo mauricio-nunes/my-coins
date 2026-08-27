@@ -17,6 +17,7 @@ ENCODING:USASCII
 CHARSET:1252
 
 <OFX>
+<BANKID>0237
 <CURDEF>BRL
 <BANKTRANLIST>
 <STMTTRN>
@@ -38,10 +39,29 @@ CHARSET:1252
 </BANKTRANLIST>
 </OFX>`
 
+const interOfx = fitIdSuffix => `OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+ENCODING:USASCII
+CHARSET:1252
+
+<OFX>
+<BANKID>077</BANKID>
+<CURDEF>BRL</CURDEF>
+<BANKTRANLIST>
+<STMTTRN><TRNTYPE>PAYMENT</TRNTYPE><DTPOSTED>20260805000000[-03:EST]</DTPOSTED><TRNAMT>-45.90</TRNAMT><FITID>INTER-${fitIdSuffix}</FITID><CHECKNUM>077</CHECKNUM><NAME>Pagamento</NAME><REFNUM>REF-${fitIdSuffix}</REFNUM><MEMO>Compra Inter importada</MEMO></STMTTRN>
+</BANKTRANLIST>
+</OFX>`
+
 test('login, navigation and persisted transaction flow are usable', async ({ page }, testInfo) => {
   const description = `Café com amigos ${testInfo.project.name}`
   await login(page)
   await expect(page.getByRole('heading', { name: /Sua vida financeira/i })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Fluxo de caixa diário' })).toBeVisible()
+  const dailyChart = page.locator('[data-apexchart-currency="BRL"]')
+  await expect(dailyChart).toHaveAttribute('data-apexchart-ready', 'true')
+  await expect(dailyChart.locator('.apexcharts-bar-series .apexcharts-series')).toHaveCount(2)
+  await expect(dailyChart.locator('.apexcharts-line-series .apexcharts-series')).toHaveCount(1)
   await page.getByRole('link', { name: /Nova transação/i }).click()
   await page.getByLabel('Descrição').fill(description)
   await page.getByLabel('Valor').fill('25,90')
@@ -54,6 +74,47 @@ test('login, navigation and persisted transaction flow are usable', async ({ pag
   await login(page)
   await page.goto(`/transactions?search=${encodeURIComponent(description)}`)
   await expect(page.getByText(description)).toBeVisible()
+})
+
+test('account balance date is visible and saved', async ({ page }, testInfo) => {
+  const accountName = `Conta datada ${testInfo.project.name}`
+  await login(page)
+  await page.goto('/accounts/create')
+  const balanceDate = page.getByLabel('Data do saldo inicial')
+  await expect(balanceDate).not.toHaveValue('')
+  await expect(page.getByText('O saldo informado representa o início deste dia.')).toBeVisible()
+  await expect(page.getByText(/os saldos, a evolução e os indicadores podem não ser apresentados corretamente/i)).toBeVisible()
+  await page.getByLabel('Nome da conta').fill(accountName)
+  await page.getByLabel('Instituição').fill('Banco Exemplo')
+  await page.locator('#opening_balance').fill('500,00')
+  await balanceDate.fill('2026-08-15')
+  await page.getByRole('button', { name: 'Adicionar conta' }).click()
+
+  await expect(page.getByRole('heading', { name: accountName })).toBeVisible()
+  await expect(page.getByText('15/08/2026')).toBeVisible()
+})
+
+test('recurring expense creates and exposes future occurrences', async ({ page }, testInfo) => {
+  const description = `Academia recorrente ${testInfo.project.name}`
+  await login(page)
+  await page.goto('/transactions/create')
+  await page.getByLabel('Descrição').fill(description)
+  await page.getByLabel('Valor').fill('129,90')
+  await page.locator('#date').fill('2026-09-05')
+  await page.getByLabel('Conta').selectOption('1')
+  await page.getByLabel('Categoria').selectOption({ label: 'Saúde e cuidados pessoais' })
+  await page.getByLabel('Repetir transação').check()
+  await expect(page.getByLabel('Frequência')).toBeVisible()
+  await page.getByLabel('Frequência').selectOption('monthly')
+  await page.getByLabel('Data final').fill('2026-12-05')
+  await page.getByRole('button', { name: 'Adicionar transação' }).click()
+
+  await expect(page.getByText('Mensal', { exact: true })).toBeVisible()
+  await page.goto('/recurrences')
+  const row = page.getByRole('row').filter({ hasText: description })
+  await expect(row).toContainText('Mensal')
+  await expect(row).toContainText('Ativa')
+  await expect(row).toContainText('05/09/2026')
 })
 
 test('tags can be created inline, filtered and managed', async ({ page }, testInfo) => {
@@ -166,6 +227,7 @@ test('OFX wizard uploads, classifies and imports transactions', async ({ page },
   const label = `Importação ${testInfo.project.name.replace('-chromium', '')}`
   await login(page)
   await page.goto('/transactions/import')
+  await page.getByLabel('Banco do arquivo').selectOption('bradesco')
   await page.getByLabel('Conta').selectOption('1')
   const labelInput = page.locator('.ts-control input').first()
   await labelInput.fill(label)
@@ -201,6 +263,7 @@ test('OFX wizard uploads, classifies and imports transactions', async ({ page },
   await expect(page.getByText('Pagamento importado')).toBeVisible()
 
   await page.goto('/transactions/import')
+  await page.getByLabel('Banco do arquivo').selectOption('bradesco')
   await page.getByLabel('Conta').selectOption('1')
   const repeatedLabel = `${label} repetida`
   const repeatedLabelInput = page.locator('.ts-control input').first()
@@ -218,7 +281,32 @@ test('OFX wizard uploads, classifies and imports transactions', async ({ page },
   await expect(duplicateRow.getByLabel('Categoria de Pagamento importado')).toBeDisabled()
 })
 
-for (const path of ['/login', '/dashboard', '/transactions', '/transactions/import', '/transfers/create', '/categories', '/category-mappings', '/tags', '/budgets', '/reports']) {
+test('Inter OFX payment reaches the classification step as an expense', async ({ page }, testInfo) => {
+  const suffix = `PW-${testInfo.project.name.toUpperCase()}`
+  await login(page)
+  await page.goto('/transactions/import')
+  await page.getByLabel('Banco do arquivo').selectOption('inter')
+  await page.getByLabel('Conta').selectOption('1')
+  const labelInput = page.locator('.ts-control input').first()
+  await labelInput.fill(`Inter ${testInfo.project.name}`)
+  await page.locator('.ts-dropdown .create').click()
+  await labelInput.press('Escape')
+  await page.getByLabel('Arquivo OFX').setInputFiles({
+    name: 'inter.ofx',
+    mimeType: 'application/x-ofx',
+    buffer: Buffer.from(interOfx(suffix)),
+  })
+  await Promise.all([
+    page.waitForURL(/transactions\/import\/review/),
+    page.locator('form[action$="/preview"]').evaluate(form => form.submit()),
+  ])
+  await expect(page.getByText('Banco Inter', { exact: true })).toBeVisible()
+  const row = page.getByRole('row').filter({ hasText: 'Compra Inter importada' })
+  await expect(row.getByText('Despesa', { exact: true })).toBeVisible()
+  await expect(row.getByText('R$ -45,90')).toBeVisible()
+})
+
+for (const path of ['/login', '/dashboard', '/transactions', '/transactions/import', '/transfers/create', '/recurrences', '/accounts', '/accounts/create', '/categories', '/category-mappings', '/tags', '/budgets', '/reports']) {
   test(`${path} has no serious accessibility violations`, async ({ page }) => {
     if (path !== '/login') await login(page)
     await page.goto(path)

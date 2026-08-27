@@ -7,7 +7,25 @@ use InvalidArgumentException;
 
 class OfxParser
 {
-    public function parse(string $contents): array
+    private const BANKS = [
+        'bradesco' => [
+            'label' => 'Bradesco',
+            'bank_id' => '237',
+            'types' => ['CREDIT' => 'income', 'DEBIT' => 'expense'],
+        ],
+        'inter' => [
+            'label' => 'Banco Inter',
+            'bank_id' => '77',
+            'types' => ['CREDIT' => 'income', 'DEBIT' => 'expense', 'PAYMENT' => 'expense'],
+        ],
+    ];
+
+    public static function supportedBanks(): array
+    {
+        return collect(self::BANKS)->map(fn (array $bank): string => $bank['label'])->all();
+    }
+
+    public function parse(string $contents, string $bankFormat): array
     {
         if (trim($contents) === '') {
             throw new InvalidArgumentException('O arquivo OFX está vazio.');
@@ -16,6 +34,20 @@ class OfxParser
         $contents = $this->toUtf8($contents);
         if (! preg_match('/<OFX>/i', $contents)) {
             throw new InvalidArgumentException('O arquivo não contém uma estrutura OFX válida.');
+        }
+
+        $bank = self::BANKS[$bankFormat] ?? null;
+        if (! $bank) {
+            throw new InvalidArgumentException('Selecione um formato de banco suportado.');
+        }
+
+        $rawBankId = $this->field($contents, 'BANKID');
+        if ($rawBankId === null || trim($rawBankId) === '') {
+            throw new InvalidArgumentException('O arquivo OFX não informa o código do banco (BANKID).');
+        }
+        $bankId = ltrim(trim($rawBankId), '0') ?: '0';
+        if ($bankId !== $bank['bank_id']) {
+            throw new InvalidArgumentException("O arquivo não corresponde ao formato {$bank['label']} selecionado.");
         }
 
         $currency = strtoupper($this->field($contents, 'CURDEF') ?? '');
@@ -31,14 +63,19 @@ class OfxParser
             throw new InvalidArgumentException('O arquivo pode conter no máximo 500 movimentações.');
         }
 
-        return array_map(fn (string $block, int $index): array => $this->transaction($block, $index), $matches[1], array_keys($matches[1]));
+        return array_map(
+            fn (string $block, int $index): array => $this->transaction($block, $index, $bankFormat, $bank['types']),
+            $matches[1],
+            array_keys($matches[1]),
+        );
     }
 
-    private function transaction(string $block, int $index): array
+    private function transaction(string $block, int $index, string $bankFormat, array $types): array
     {
         $number = $index + 1;
         $ofxType = strtoupper($this->requiredField($block, 'TRNTYPE', $number));
-        if (! in_array($ofxType, ['CREDIT', 'DEBIT'], true)) {
+        $type = $types[$ofxType] ?? null;
+        if (! $type) {
             throw new InvalidArgumentException("A movimentação {$number} possui um tipo não suportado ({$ofxType}).");
         }
 
@@ -58,7 +95,7 @@ class OfxParser
         }
         $amount = ((int) $amountMatch[2] * 100) + (int) str_pad($amountMatch[3] ?? '', 2, '0');
         $isNegative = ($amountMatch[1] ?? '') === '-';
-        if ($amount <= 0 || ($ofxType === 'DEBIT') !== $isNegative) {
+        if ($amount <= 0 || ($type === 'expense') !== $isNegative) {
             throw new InvalidArgumentException("A movimentação {$number} possui tipo e valor incompatíveis.");
         }
 
@@ -67,8 +104,9 @@ class OfxParser
         $memo = preg_replace('/\s+/u', ' ', trim($this->field($block, 'MEMO') ?? '')) ?? '';
 
         return [
+            'bank_format' => $bankFormat,
             'ofx_type' => $ofxType,
-            'type' => $ofxType === 'CREDIT' ? 'income' : 'expense',
+            'type' => $type,
             'date' => $date->format('Y-m-d'),
             'amount' => $amount,
             'description' => mb_substr($memo !== '' ? $memo : 'Transação OFX', 0, 120),

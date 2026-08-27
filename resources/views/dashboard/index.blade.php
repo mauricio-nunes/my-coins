@@ -55,6 +55,19 @@
         </div>
     </div>
 
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header border-0 bg-transparent">
+            <h2 id="daily-cash-flow-title" class="h5 mb-1">Fluxo de caixa diário</h2>
+            <span class="small text-body-secondary">Receitas e despesas diárias com evolução do saldo</span>
+        </div>
+        <div class="card-body">
+            <figure class="mb-0" aria-labelledby="daily-cash-flow-title">
+                <div data-apexchart data-apexchart-currency="BRL" data-apexchart-config="{{ json_encode($dailyCashFlowChart) }}"></div>
+                <figcaption class="visually-hidden">Gráfico de receitas e despesas diárias em barras e evolução do saldo no mês atual.</figcaption>
+            </figure>
+        </div>
+    </div>
+
     <div class="row g-4">
         <div class="col-xl-7">
             <div class="card border-0 shadow-sm">

@@ -42,4 +42,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(CategoryKeyword::class);
     }
+
+    public function recurringTransactions(): HasMany
+    {
+        return $this->hasMany(RecurringTransaction::class);
+    }
 }

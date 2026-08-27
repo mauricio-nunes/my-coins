@@ -7,6 +7,7 @@ use App\Http\Controllers\Finance\BudgetController;
 use App\Http\Controllers\Finance\CategoryController;
 use App\Http\Controllers\Finance\DashboardController;
 use App\Http\Controllers\Finance\OfxImportController;
+use App\Http\Controllers\Finance\RecurringTransactionController;
 use App\Http\Controllers\Finance\ReportController;
 use App\Http\Controllers\Finance\TagController;
 use App\Http\Controllers\Finance\TransactionController;
@@ -34,6 +35,8 @@ Route::middleware(['auth', 'password.changed'])->group(function (): void {
     Route::post('/transactions/import', [OfxImportController::class, 'store'])->name('imports.store');
     Route::get('/transactions/import/result', [OfxImportController::class, 'result'])->name('imports.result');
     Route::resource('transactions', TransactionController::class);
+    Route::patch('/recurrences/{recurrence}/resume', [RecurringTransactionController::class, 'resume'])->name('recurrences.resume');
+    Route::resource('recurrences', RecurringTransactionController::class)->only(['index', 'edit', 'destroy']);
     Route::resource('transfers', TransferController::class)->only(['create', 'store', 'edit', 'update']);
     Route::resource('accounts', AccountController::class);
     Route::resource('categories', CategoryController::class)->except('show');

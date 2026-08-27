@@ -27,6 +27,7 @@ class OfxImportController extends Controller
     {
         $validated = $request->validate([
             'ofx_file' => ['required', 'file', 'max:2048'],
+            'bank_format' => ['required', 'string', 'in:bradesco,inter'],
             'account_id' => ['required', 'integer'],
             'label' => ['required', 'string', 'max:30'],
         ]);
@@ -45,7 +46,7 @@ class OfxImportController extends Controller
             if (! is_string($contents)) {
                 throw new InvalidArgumentException('Não foi possível ler o arquivo OFX.');
             }
-            $rows = $parser->parse($contents);
+            $rows = $parser->parse($contents, $validated['bank_format']);
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages(['ofx_file' => $exception->getMessage()]);
         }
@@ -63,6 +64,8 @@ class OfxImportController extends Controller
         $request->session()->put(self::DRAFT_KEY, [
             'token' => Str::random(40),
             'file_name' => $file->getClientOriginalName(),
+            'bank_format' => $validated['bank_format'],
+            'bank_name' => OfxParser::supportedBanks()[$validated['bank_format']],
             'account_id' => $account['id'],
             'label' => trim(preg_replace('/\s+/u', ' ', $validated['label']) ?? $validated['label']),
             'rows' => $rows,
@@ -141,6 +144,7 @@ class OfxImportController extends Controller
             }
 
             $common = [
+                '_ofx_bank' => $draft['bank_format'],
                 'description' => $row['description'],
                 'amount' => $row['amount'],
                 'date' => $row['date'],
@@ -229,6 +233,7 @@ class OfxImportController extends Controller
         return [
             'accounts' => collect($store->all('accounts'))->where('archived', false)->values(),
             'tags' => collect($store->all('tags'))->sortBy('name')->values(),
+            'bankFormats' => OfxParser::supportedBanks(),
         ];
     }
 }

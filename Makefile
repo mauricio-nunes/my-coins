@@ -7,7 +7,7 @@ export APP_UID APP_GID
 .PHONY: setup fix-permissions clean-containers up down build test format e2e debug reset
 
 setup:
-	$(COMPOSE) build app
+	$(COMPOSE) build app scheduler
 	$(COMPOSE) up -d mysql
 	$(MAKE) fix-permissions
 	$(COMPOSE) run --rm app composer install
@@ -23,10 +23,10 @@ fix-permissions:
 	$(COMPOSE) run --rm --user 0:0 vite chown -R $(APP_UID):$(APP_GID) /var/www/html/node_modules /var/www/html/public/build
 
 clean-containers:
-	$(COMPOSE) rm -sf app vite
+	$(COMPOSE) rm -sf app vite scheduler
 
 up: clean-containers
-	$(COMPOSE) up app vite mysql
+	$(COMPOSE) up app vite scheduler mysql
 
 down:
 	$(COMPOSE) down
@@ -36,7 +36,7 @@ build:
 
 test:
 	$(COMPOSE) exec -T mysql sh -c 'mysql -uroot -p"$$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS my_coins_testing; GRANT ALL PRIVILEGES ON my_coins_testing.* TO '\''$$MYSQL_USER'\''@'\''%'\'';"'
-	$(COMPOSE) run --rm app php artisan test
+	COMPOSE_DB_DATABASE=my_coins_testing $(COMPOSE) run --rm -e DB_DATABASE=my_coins_testing app php artisan test
 
 format:
 	$(COMPOSE) run --rm app vendor/bin/pint
@@ -44,14 +44,16 @@ format:
 e2e:
 	$(COMPOSE) exec -T mysql sh -c 'mysql -uroot -p"$$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS my_coins_e2e; GRANT ALL PRIVILEGES ON my_coins_e2e.* TO '\''$$MYSQL_USER'\''@'\''%'\'';"'
 	$(COMPOSE) rm -sf app
-	COMPOSE_DB_DATABASE=my_coins_e2e PLAYWRIGHT_TEST=1 $(COMPOSE) up -d --no-deps app
+	COMPOSE_DB_DATABASE=my_coins_e2e PLAYWRIGHT_TEST=1 $(COMPOSE) up -d --no-deps --force-recreate app
+	$(COMPOSE) exec -T app php artisan optimize:clear
+	@test "$$($(COMPOSE) exec -T app printenv DB_DATABASE | tr -d '\r')" = "my_coins_e2e" || (echo "ERRO: o container E2E não está usando my_coins_e2e; migrate:fresh cancelado." >&2; exit 1)
 	COMPOSE_DB_DATABASE=my_coins_e2e PLAYWRIGHT_TEST=1 $(COMPOSE) exec -T app php -r "is_file('public/hot') && unlink('public/hot');"
 	COMPOSE_DB_DATABASE=my_coins_e2e PLAYWRIGHT_TEST=1 $(COMPOSE) exec -T app php artisan migrate:fresh --seed --force
 	PLAYWRIGHT_BASE_URL=http://$$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $$($(COMPOSE) ps -q app)):8000 $(COMPOSE) run --rm browser npm run test:e2e
 	$(COMPOSE) rm -sf app
 
 debug: clean-containers
-	XDEBUG_MODE=debug $(COMPOSE) up app vite
+	XDEBUG_MODE=debug $(COMPOSE) up app vite scheduler mysql
 
 reset:
 	$(COMPOSE) run --rm app php artisan optimize:clear

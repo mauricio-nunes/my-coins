@@ -6,8 +6,10 @@ use App\Models\Account;
 use App\Models\Budget;
 use App\Models\Category;
 use App\Models\CategoryKeyword;
+use App\Models\RecurringTransaction;
 use App\Models\Tag;
 use App\Models\Transaction;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -131,6 +133,13 @@ class FinanceStore
 
     public function ofxDuplicateKey(int $accountId, array $transaction): string
     {
+        $bankFormat = strtolower(trim((string) ($transaction['_ofx_bank'] ?? $transaction['bank_format'] ?? 'bradesco')));
+        if ($bankFormat === 'inter') {
+            $fitId = Str::upper(trim((string) ($transaction['ofx_fitid'] ?? $transaction['fitid'] ?? '')));
+
+            return hash('sha256', implode('|', [$this->userId(), $accountId, 'inter', $fitId]));
+        }
+
         $checkNumber = Str::upper(trim((string) ($transaction['ofx_checknum'] ?? $transaction['checknum'] ?? '')));
         $description = Str::lower(Str::ascii((string) ($transaction['description'] ?? '')));
         $description = trim(preg_replace('/[^a-z0-9]+/', ' ', $description) ?? $description);
@@ -162,6 +171,7 @@ class FinanceStore
                     continue;
                 }
                 $attributes['active_ofx_key'] = $key;
+                unset($attributes['_ofx_bank'], $attributes['bank_format']);
                 try {
                     $imported[] = $this->create('transactions', $attributes + ['tag_ids' => [$tag->id]]);
                 } catch (UniqueConstraintViolationException) {
@@ -190,7 +200,7 @@ class FinanceStore
     {
         $tag = Tag::query()->where('user_id', $this->userId())->find($id);
 
-        return $tag ? $tag->transactions()->count() : 0;
+        return $tag ? $tag->transactions()->count() + $tag->recurringTransactions()->count() : 0;
     }
 
     public function renameTag(int $id, string $name): ?array
@@ -207,6 +217,7 @@ class FinanceStore
 
         return DB::transaction(function () use ($tag): bool {
             $tag->transactions()->detach();
+            $tag->recurringTransactions()->detach();
 
             return (bool) $tag->delete();
         });
@@ -214,14 +225,37 @@ class FinanceStore
 
     public function balance(int $accountId): int
     {
+        return $this->balanceAt($accountId, CarbonImmutable::today()->toDateString());
+    }
+
+    public function balanceAt(int $accountId, string $date): int
+    {
         $account = $this->find('accounts', $accountId);
         if (! $account) {
             return 0;
         }
 
+        $balanceDate = CarbonImmutable::parse($account['opening_balance_date'])->toDateString();
+        $requestedDate = CarbonImmutable::parse($date)->toDateString();
+        if ($requestedDate < $balanceDate) {
+            return 0;
+        }
+
         return (int) $account['opening_balance'] + $this->transactions(['account_id' => $accountId])
-            ->where('date', '<=', now()->format('Y-m-d'))
+            ->where('date', '>=', $balanceDate)
+            ->where('date', '<=', $requestedDate)
             ->sum(fn (array $transaction): int => $this->transactionEffect($transaction, $accountId));
+    }
+
+    public function hasTransactionsBeforeOpeningBalance(int $accountId): bool
+    {
+        $account = $this->find('accounts', $accountId);
+        if (! $account) {
+            return false;
+        }
+
+        return $this->transactions(['account_id' => $accountId])
+            ->contains(fn (array $transaction): bool => $transaction['date'] < $account['opening_balance_date']);
     }
 
     public function dashboard(): array
@@ -240,10 +274,41 @@ class FinanceStore
         ];
     }
 
+    public function dailyCashFlow(?CarbonImmutable $referenceDate = null): Collection
+    {
+        $monthStart = ($referenceDate ?? CarbonImmutable::now())->startOfMonth();
+        $monthEnd = $monthStart->endOfMonth();
+        $accounts = collect($this->all('accounts'))->where('archived', false)->values();
+        $accountIds = $accounts->pluck('id')->map(fn (int $id): int => $id)->all();
+        $transactions = $this->transactions(['to' => $monthEnd->toDateString()]);
+        $monthlyTransactions = $transactions->filter(
+            fn (array $transaction): bool => $transaction['date'] >= $monthStart->toDateString()
+                && in_array($transaction['account_id'], $accountIds, true),
+        );
+        $balance = $this->consolidatedBalanceAt($accounts, $transactions, $monthStart->subDay());
+        $points = collect();
+
+        for ($date = $monthStart; $date->lte($monthEnd); $date = $date->addDay()) {
+            $daily = $monthlyTransactions->where('date', $date->toDateString());
+            $income = $daily->where('type', 'income')->sum('amount');
+            $expenses = $daily->where('type', 'expense')->sum('amount');
+            $balance += $income - $expenses;
+            $points->push([
+                'date' => $date->toDateString(),
+                'income' => $income,
+                'expense' => $expenses,
+                'balance' => $balance,
+            ]);
+        }
+
+        return $points;
+    }
+
     public function categoryIsUsed(int $id): bool
     {
         return Transaction::query()->where('user_id', $this->userId())->where('category_id', $id)->exists()
-            || Budget::query()->where('user_id', $this->userId())->where('category_id', $id)->exists();
+            || Budget::query()->where('user_id', $this->userId())->where('category_id', $id)->exists()
+            || RecurringTransaction::query()->where('user_id', $this->userId())->where('category_id', $id)->where('status', 'active')->exists();
     }
 
     public function automaticCategorizationCategories(): Collection
@@ -383,6 +448,22 @@ class FinanceStore
         }
 
         return $transaction['type'] === 'income' ? $transaction['amount'] : -$transaction['amount'];
+    }
+
+    private function consolidatedBalanceAt(Collection $accounts, Collection $transactions, CarbonImmutable $date): int
+    {
+        $requestedDate = $date->toDateString();
+
+        return $accounts->sum(function (array $account) use ($transactions, $requestedDate): int {
+            if ($requestedDate < $account['opening_balance_date']) {
+                return 0;
+            }
+
+            return (int) $account['opening_balance'] + $transactions
+                ->where('date', '>=', $account['opening_balance_date'])
+                ->where('date', '<=', $requestedDate)
+                ->sum(fn (array $transaction): int => $this->transactionEffect($transaction, $account['id']));
+        });
     }
 
     private function query(string $resource): Builder

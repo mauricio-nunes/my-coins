@@ -62,6 +62,7 @@ return [
         ['text' => 'Dashboard', 'route' => 'dashboard', 'icon' => 'bi bi-grid-1x2-fill'],
         ['header' => 'ORGANIZAÇÃO'],
         ['text' => 'Transações', 'route' => 'transactions.index', 'active' => ['transactions*'], 'icon' => 'bi bi-arrow-left-right'],
+        ['text' => 'Recorrências', 'route' => 'recurrences.index', 'active' => ['recurrences*'], 'icon' => 'bi bi-arrow-repeat'],
         ['text' => 'Importar OFX', 'route' => 'imports.create', 'active' => ['imports*'], 'icon' => 'bi bi-file-earmark-arrow-up'],
         ['text' => 'Transferir', 'route' => 'transfers.create', 'active' => ['transfers*'], 'icon' => 'bi bi-arrow-right-circle'],
         ['text' => 'Contas', 'route' => 'accounts.index', 'active' => ['accounts*'], 'icon' => 'bi bi-wallet2'],

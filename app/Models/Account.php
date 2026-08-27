@@ -15,7 +15,11 @@ class Account extends Model
 
     protected function casts(): array
     {
-        return ['archived' => 'boolean', 'opening_balance' => 'integer'];
+        return [
+            'archived' => 'boolean',
+            'opening_balance' => 'integer',
+            'opening_balance_date' => 'date:Y-m-d',
+        ];
     }
 
     public function user(): BelongsTo
@@ -26,5 +30,10 @@ class Account extends Model
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class);
+    }
+
+    public function recurringTransactions(): HasMany
+    {
+        return $this->hasMany(RecurringTransaction::class);
     }
 }

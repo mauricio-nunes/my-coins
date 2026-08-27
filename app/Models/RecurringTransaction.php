@@ -6,9 +6,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class Transaction extends Model
+class RecurringTransaction extends Model
 {
     use HasFactory, SoftDeletes;
 
@@ -18,9 +19,9 @@ class Transaction extends Model
     {
         return [
             'amount' => 'integer',
-            'date' => 'date:Y-m-d',
-            'recurrence_date' => 'date:Y-m-d',
-            'imported_at' => 'datetime',
+            'start_date' => 'date:Y-m-d',
+            'end_date' => 'date:Y-m-d',
+            'generated_until' => 'date:Y-m-d',
         ];
     }
 
@@ -29,28 +30,23 @@ class Transaction extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function tags(): BelongsToMany
-    {
-        return $this->belongsToMany(Tag::class);
-    }
-
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class);
     }
 
-    public function sourceAccount(): BelongsTo
+    public function category(): BelongsTo
     {
-        return $this->belongsTo(Account::class, 'source_account_id');
+        return $this->belongsTo(Category::class);
     }
 
-    public function destinationAccount(): BelongsTo
+    public function tags(): BelongsToMany
     {
-        return $this->belongsTo(Account::class, 'destination_account_id');
+        return $this->belongsToMany(Tag::class);
     }
 
-    public function recurrence(): BelongsTo
+    public function transactions(): HasMany
     {
-        return $this->belongsTo(RecurringTransaction::class, 'recurring_transaction_id');
+        return $this->hasMany(Transaction::class);
     }
 }

@@ -52,6 +52,17 @@ function initCharts() {
   document.querySelectorAll('[data-apexchart]').forEach((el) => {
     if (el.dataset.apexchartReady) return
     const config = parseConfig(el, 'data-apexchart-config')
+    if (el.dataset.apexchartCurrency === 'BRL') {
+      const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+      config.yaxis = {
+        ...(config.yaxis || {}),
+        labels: { ...(config.yaxis?.labels || {}), formatter: value => currency.format(value) },
+      }
+      config.tooltip = {
+        ...(config.tooltip || {}),
+        y: { ...(config.tooltip?.y || {}), formatter: value => currency.format(value) },
+      }
+    }
     try {
       new window.ApexCharts(el, config).render()
       el.dataset.apexchartReady = 'true'
@@ -208,6 +219,19 @@ function initTreeviewA11y() {
 }
 
 function initFinanceForms() {
+  document.querySelectorAll('[data-recurrence-toggle]').forEach((toggle) => {
+    const fields = toggle.closest('form')?.querySelector('[data-recurrence-fields]')
+    if (!fields) return
+    const syncRecurrence = () => {
+      fields.classList.toggle('d-none', !toggle.checked)
+      fields.querySelectorAll('[data-recurrence-input]').forEach((input) => {
+        input.disabled = !toggle.checked
+      })
+    }
+    toggle.addEventListener('change', syncRecurrence)
+    syncRecurrence()
+  })
+
   document.querySelectorAll('form[data-confirm]').forEach((form) => {
     form.addEventListener('submit', (event) => {
       if (!window.confirm(form.dataset.confirm)) event.preventDefault()

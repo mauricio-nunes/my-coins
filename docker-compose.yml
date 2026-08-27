@@ -42,6 +42,26 @@ services:
     volumes:
       - .:/var/www/html
 
+  scheduler:
+    build:
+      context: .
+      args:
+        APP_UID: ${APP_UID:-1000}
+        APP_GID: ${APP_GID:-1000}
+    command: php artisan schedule:work
+    environment:
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: ${COMPOSE_DB_DATABASE:-my_coins}
+      DB_USERNAME: ${COMPOSE_DB_USERNAME:-my_coins}
+      DB_PASSWORD: ${COMPOSE_DB_PASSWORD:-mycoins_local}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - .:/var/www/html
+
   browser:
     image: mcr.microsoft.com/playwright:v1.62.1-noble
     user: "${APP_UID:-1000}:${APP_GID:-1000}"

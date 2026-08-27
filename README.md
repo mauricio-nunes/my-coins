@@ -6,6 +6,7 @@ Aplicação de finanças pessoais em Laravel 13 e AdminLTE 4, com autenticação
 
 - Dashboard com saldo, receitas, despesas, fluxo de caixa e progresso dos orçamentos.
 - Fluxos de transações, transferências, contas, categorias, tags e orçamentos.
+- Transações recorrentes semanais, mensais e anuais, com projeção automática de 12 meses.
 - Importação OFX em três etapas, com classificação, transferências e detecção de duplicidade.
 - Relatórios filtráveis, gráficos e detalhamento por categoria.
 - Login protegido, troca obrigatória da senha inicial e recuperação pela CLI.
@@ -26,7 +27,13 @@ Acesse `http://localhost:8000`. O Vite usa a porta `5173` e o MySQL é exposto e
 
 Se npm/Vite retornar `EACCES` em `node_modules` ou `public/build`, execute `make fix-permissions`. Para Docker Compose v2, acrescente `COMPOSE="docker compose"` aos comandos.
 
-Os alvos `make up` e `make debug` recriam somente os containers descartáveis `app` e `vite`, evitando o erro `KeyError: 'ContainerConfig'` do Compose 1.29. Dados e sessões permanecem no volume MySQL.
+Os alvos `make up` e `make debug` recriam somente os containers descartáveis `app`, `vite` e `scheduler`, evitando o erro `KeyError: 'ContainerConfig'` do Compose 1.29. Dados e sessões permanecem no volume MySQL.
+
+O serviço `scheduler` acompanha a aplicação e executa diariamente a geração idempotente das próximas recorrências. Para executar manualmente:
+
+```bash
+docker-compose run --rm app php artisan mycoins:generate-recurrences
+```
 
 Para gerar uma nova senha temporária e revogar sessões existentes:
 
