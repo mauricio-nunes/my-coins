@@ -59,7 +59,12 @@ class DashboardController extends Controller
                 'options' => ['chart' => ['height' => 300], 'markers' => ['size' => 0], 'xaxis' => ['labels' => ['rotate' => -60]]],
             ]],
         ];
+        $today = Carbon::today();
+        $monthTransactionFilters = [
+            'from' => $today->copy()->startOfMonth()->toDateString(),
+            'to' => $today->copy()->endOfMonth()->toDateString(),
+        ];
 
-        return view('dashboard.index', compact('summary', 'accounts', 'accountMap', 'budgets', 'categories', 'report', 'cashFlowChart', 'dailyCashFlowChart'));
+        return view('dashboard.index', compact('summary', 'accounts', 'accountMap', 'budgets', 'categories', 'report', 'cashFlowChart', 'dailyCashFlowChart', 'monthTransactionFilters'));
     }
 }

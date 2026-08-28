@@ -273,8 +273,21 @@ class FinanceStore
             'income' => $income,
             'expenses' => $expenses,
             'result' => $income - $expenses,
-            'recent' => $this->transactions()->take(6),
+            'upcoming' => $this->upcomingTransactions(),
         ];
+    }
+
+    public function upcomingTransactions(int $limit = 10): Collection
+    {
+        return Transaction::query()
+            ->where('user_id', $this->userId())
+            ->whereDate('date', '>=', CarbonImmutable::today()->toDateString())
+            ->with('tags')
+            ->orderBy('date')
+            ->orderBy('id')
+            ->limit(max(1, $limit))
+            ->get()
+            ->map(fn (Transaction $transaction): array => $this->toArray($transaction));
     }
 
     public function dailyCashFlow(?CarbonImmutable $referenceDate = null): Collection

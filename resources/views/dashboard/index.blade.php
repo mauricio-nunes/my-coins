@@ -71,9 +71,9 @@
     <div class="row g-4">
         <div class="col-xl-7">
             <div class="card border-0 shadow-sm">
-                <div class="card-header border-0 bg-transparent d-flex justify-content-between align-items-center"><h2 class="h5 mb-0">Transações recentes</h2><a href="{{ route('transactions.index') }}" class="small">Ver todas</a></div>
+                <div class="card-header border-0 bg-transparent d-flex justify-content-between align-items-center"><h2 class="h5 mb-0">Próximas transações</h2><a href="{{ route('transactions.index', $monthTransactionFilters) }}" class="small">Ver todas do mês</a></div>
                 <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Descrição</th><th>Data</th><th class="text-end">Valor</th></tr></thead><tbody>
-                    @foreach ($summary['recent'] as $transaction)
+                    @forelse ($summary['upcoming'] as $transaction)
                         @php
                             $isTransfer = $transaction['type'] === 'transfer';
                             $source = $isTransfer ? $accountMap[$transaction['source_account_id']] : null;
@@ -81,7 +81,7 @@
                             $description = $transaction['description'] ?: "Transferência de {$source['name']} para {$destination['name']}";
                         @endphp
                         <tr><td><a class="text-decoration-none fw-medium text-body" href="{{ route('transactions.show', $transaction['id']) }}">{{ $description }}</a><div class="small text-body-secondary">{{ $isTransfer ? $source['name'].' → '.$destination['name'] : $categories[$transaction['category_id']]['name'] }}</div></td><td>{{ \Carbon\Carbon::parse($transaction['date'])->format('d/m/Y') }}</td><td class="text-end fw-semibold {{ $transaction['type'] === 'income' ? 'text-success' : ($transaction['type'] === 'expense' ? 'text-danger' : 'text-body') }}">@if($isTransfer)<x-money :value="$transaction['amount']" />@else<x-money :value="($transaction['type'] === 'income' ? 1 : -1) * $transaction['amount']" :signed="true" />@endif</td></tr>
-                    @endforeach
+                    @empty <tr><td colspan="3" class="text-center py-4 text-body-secondary">Nenhuma transação futura encontrada.</td></tr> @endforelse
                 </tbody></table></div>
             </div>
         </div>

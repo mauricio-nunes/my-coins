@@ -94,6 +94,39 @@ test('account balance date is visible and saved', async ({ page }, testInfo) => 
   await expect(page.getByText('15/08/2026')).toBeVisible()
 })
 
+test('dashboard lists upcoming transactions and links to the current month', async ({ page }, testInfo) => {
+  const description = `Próximo compromisso ${testInfo.project.name}`
+  const upcomingDate = new Date(Date.now() + (2 * 24 * 60 * 60 * 1000)).toISOString().slice(0, 10)
+  await login(page)
+  await page.goto('/transactions/create')
+  await page.getByLabel('Descrição').fill(description)
+  await page.getByLabel('Valor').fill('85,00')
+  await page.locator('#date').fill(upcomingDate)
+  await page.getByLabel('Conta').selectOption('1')
+  await page.getByLabel('Categoria').selectOption({ label: 'Serviços e assinaturas' })
+  await page.getByRole('button', { name: /Adicionar transação/i }).click()
+
+  await page.goto('/dashboard')
+  const upcomingCard = page.locator('.card').filter({ has: page.getByRole('heading', { name: 'Próximas transações' }) })
+  await expect(upcomingCard.getByText(description)).toBeVisible()
+  const monthLink = upcomingCard.getByRole('link', { name: 'Ver todas do mês' })
+  const target = new URL(await monthLink.getAttribute('href'))
+  const from = target.searchParams.get('from')
+  const to = target.searchParams.get('to')
+  expect(from).toMatch(/^\d{4}-\d{2}-01$/)
+  expect(to.slice(0, 7)).toBe(from.slice(0, 7))
+  const [year, month] = from.split('-').map(Number)
+  expect(Number(to.slice(8, 10))).toBe(new Date(Date.UTC(year, month, 0)).getUTCDate())
+
+  await monthLink.click()
+  await expect(page).toHaveURL(target.href)
+  await expect(page.locator('#from')).toHaveValue(from)
+  await expect(page.locator('#to')).toHaveValue(to)
+
+  const accessibility = await new AxeBuilder({ page }).disableRules(['color-contrast']).analyze()
+  expect(accessibility.violations.filter(v => ['serious', 'critical'].includes(v.impact))).toEqual([])
+})
+
 test('recurring expense creates and exposes future occurrences', async ({ page }, testInfo) => {
   const description = `Academia recorrente ${testInfo.project.name}`
   await login(page)
