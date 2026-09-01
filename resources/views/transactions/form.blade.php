@@ -1,6 +1,8 @@
 @extends('layouts.app')
 @php
     $editing = (bool) $transaction;
+    $returnTo = $returnTo ?? null;
+    $cancelTarget = $returnTo ?: route('transactions.index');
     $selectedTags = old('tags', collect($transaction['tag_ids'] ?? [])
         ->map(function ($id) use ($tags) {
             return $tags->firstWhere('id', $id)['name'] ?? null;
@@ -21,12 +23,13 @@
 @section('eyebrow', 'TRANSAÇÕES')
 @section('page_title', $editing ? 'Editar transação' : 'Nova transação')
 @section('page_subtitle', 'Preencha os dados da movimentação financeira.')
-@section('page_actions')<a href="{{ route('transactions.index') }}" class="btn btn-outline-secondary">Cancelar</a>@endsection
+@section('page_actions')<a href="{{ $cancelTarget }}" class="btn btn-outline-secondary">Cancelar</a>@endsection
 
 @section('page_content')
 <div class="row"><div class="col-xl-8"><div class="card border-0 shadow-sm"><div class="card-body p-4">
 <form method="post" action="{{ $editing ? route('transactions.update', $transaction['id']) : route('transactions.store') }}">
     @csrf @if($editing) @method('put') @endif
+    @if($editing && $returnTo)<input type="hidden" name="return_to" value="{{ $returnTo }}">@endif
     <div class="row g-3">
         <div class="col-12"><label for="description" class="form-label">Descrição</label><input id="description" name="description" value="{{ old('description', $transaction['description'] ?? '') }}" class="form-control @error('description') is-invalid @enderror" maxlength="120" required><x-field-error name="description" /></div>
         <div class="col-md-6"><label for="type" class="form-label">Tipo</label><select id="type" name="type" class="form-select @error('type') is-invalid @enderror" required><option value="expense" @selected(old('type', $transaction['type'] ?? 'expense') === 'expense')>Despesa</option><option value="income" @selected(old('type', $transaction['type'] ?? '') === 'income')>Receita</option></select><x-field-error name="type" /></div>
@@ -36,6 +39,7 @@
         <div class="col-12"><label for="category_id" class="form-label">Categoria</label><select id="category_id" name="category_id" class="form-select @error('category_id') is-invalid @enderror" required><option value="">Selecione</option>@foreach($categories->groupBy('type') as $type => $items)<optgroup label="{{ $type === 'income' ? 'Receitas' : 'Despesas' }}">@foreach($items as $category)<option value="{{ $category['id'] }}" data-type="{{ $category['type'] }}" @selected(old('category_id', $transaction['category_id'] ?? '') == $category['id'])>{{ $category['name'] }}</option>@endforeach</optgroup>@endforeach</select><x-field-error name="category_id" /></div>
         <div class="col-12"><label for="tags" class="form-label">Tags <span class="text-body-secondary fw-normal">(opcional)</span></label><select id="tags" name="tags[]" multiple aria-label="Tags da transação" class="form-select @error('tags') is-invalid @enderror @error('tags.*') is-invalid @enderror" data-tom-select data-tom-select-config="{{ $tagSelectConfig }}"><option value=""></option>@foreach($tags as $tag)<option value="{{ $tag['name'] }}" @selected(in_array($tag['name'], $selectedTags, true))>{{ $tag['name'] }}</option>@endforeach @foreach($selectedTags as $selectedTag) @if(!$tags->contains('name', $selectedTag))<option value="{{ $selectedTag }}" selected>{{ $selectedTag }}</option>@endif @endforeach</select><div class="form-text">Use até 10 tags. Digite um nome e pressione Enter para criar.</div><x-field-error name="tags" />@error('tags.*')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror</div>
         <div class="col-12"><label for="notes" class="form-label">Observações <span class="text-body-secondary fw-normal">(opcional)</span></label><textarea id="notes" name="notes" rows="3" maxlength="500" class="form-control @error('notes') is-invalid @enderror">{{ old('notes', $transaction['notes'] ?? '') }}</textarea><x-field-error name="notes" /></div>
+        <div class="col-12"><input type="hidden" name="reconciled" value="0"><div class="form-check form-switch"><input id="reconciled" name="reconciled" value="1" type="checkbox" role="switch" class="form-check-input @error('reconciled') is-invalid @enderror" @checked(old('reconciled', $transaction['reconciled'] ?? false))><label for="reconciled" class="form-check-label fw-semibold">Transação conciliada</label></div><div class="form-text">Este status é apenas organizacional e não altera saldos, orçamentos ou relatórios.</div><x-field-error name="reconciled" /></div>
         @if(!$editing)
             <div class="col-12"><div class="form-check form-switch"><input id="recurring" name="recurring" value="1" type="checkbox" class="form-check-input" @checked(old('recurring')) data-recurrence-toggle><label for="recurring" class="form-check-label fw-semibold">Repetir transação</label></div><div class="form-text">As próximas ocorrências serão criadas automaticamente para os próximos 12 meses.</div></div>
             <div class="col-12 {{ old('recurring') ? '' : 'd-none' }}" data-recurrence-fields>
@@ -53,7 +57,7 @@
             </div></div></div>
         @endif
     </div>
-    <div class="d-flex justify-content-end gap-2 mt-4"><a href="{{ route('transactions.index') }}" class="btn btn-light">Cancelar</a><button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1"></i>{{ $editing ? 'Salvar alterações' : 'Adicionar transação' }}</button></div>
+    <div class="d-flex justify-content-end gap-2 mt-4"><a href="{{ $cancelTarget }}" class="btn btn-light">Cancelar</a><button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1"></i>{{ $editing ? 'Salvar alterações' : 'Adicionar transação' }}</button></div>
 </form>
 </div></div></div></div>
 @endsection

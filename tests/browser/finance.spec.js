@@ -94,6 +94,39 @@ test('account balance date is visible and saved', async ({ page }, testInfo) => 
   await expect(page.getByText('15/08/2026')).toBeVisible()
 })
 
+test('dashboard lists upcoming transactions and links to the current month', async ({ page }, testInfo) => {
+  const description = `Próximo compromisso ${testInfo.project.name}`
+  const upcomingDate = new Date(Date.now() + (2 * 24 * 60 * 60 * 1000)).toISOString().slice(0, 10)
+  await login(page)
+  await page.goto('/transactions/create')
+  await page.getByLabel('Descrição').fill(description)
+  await page.getByLabel('Valor').fill('85,00')
+  await page.locator('#date').fill(upcomingDate)
+  await page.getByLabel('Conta').selectOption('1')
+  await page.getByLabel('Categoria').selectOption({ label: 'Serviços e assinaturas' })
+  await page.getByRole('button', { name: /Adicionar transação/i }).click()
+
+  await page.goto('/dashboard')
+  const upcomingCard = page.locator('.card').filter({ has: page.getByRole('heading', { name: 'Próximas transações' }) })
+  await expect(upcomingCard.getByText(description)).toBeVisible()
+  const monthLink = upcomingCard.getByRole('link', { name: 'Ver todas do mês' })
+  const target = new URL(await monthLink.getAttribute('href'))
+  const from = target.searchParams.get('from')
+  const to = target.searchParams.get('to')
+  expect(from).toMatch(/^\d{4}-\d{2}-01$/)
+  expect(to.slice(0, 7)).toBe(from.slice(0, 7))
+  const [year, month] = from.split('-').map(Number)
+  expect(Number(to.slice(8, 10))).toBe(new Date(Date.UTC(year, month, 0)).getUTCDate())
+
+  await monthLink.click()
+  await expect(page).toHaveURL(target.href)
+  await expect(page.locator('#from')).toHaveValue(from)
+  await expect(page.locator('#to')).toHaveValue(to)
+
+  const accessibility = await new AxeBuilder({ page }).disableRules(['color-contrast']).analyze()
+  expect(accessibility.violations.filter(v => ['serious', 'critical'].includes(v.impact))).toEqual([])
+})
+
 test('recurring expense creates and exposes future occurrences', async ({ page }, testInfo) => {
   const description = `Academia recorrente ${testInfo.project.name}`
   await login(page)
@@ -181,6 +214,62 @@ test('transactions can be filtered by category', async ({ page }) => {
   await expect(movements.getByText('Supermercado Vila')).toBeVisible()
   await expect(movements.getByText('Aluguel')).toHaveCount(0)
   await expect(movements.getByText('Reserva mensal')).toHaveCount(0)
+
+  const accessibility = await new AxeBuilder({ page }).disableRules(['color-contrast']).analyze()
+  expect(accessibility.violations.filter(v => ['serious', 'critical'].includes(v.impact))).toEqual([])
+})
+
+test('transactions can be reconciled while preserving list filters', async ({ page }, testInfo) => {
+  const description = `Conciliação rápida ${testInfo.project.name}`
+  await login(page)
+  await page.goto('/transactions/create')
+  await page.getByLabel('Descrição').fill(description)
+  await page.getByLabel('Valor').fill('49,90')
+  await page.getByLabel('Conta').selectOption('1')
+  await page.getByLabel('Categoria').selectOption({ label: 'Alimentação' })
+  await page.getByLabel('Transação conciliada').check()
+  await page.getByRole('button', { name: /Adicionar transação/i }).click()
+  await expect(page.getByText('Conciliada', { exact: true })).toBeVisible()
+
+  await page.goto(`/transactions?search=${encodeURIComponent(description)}&reconciled=yes`)
+  const filteredUrl = page.url()
+  let row = page.getByRole('row').filter({ hasText: description })
+  await expect(row).toContainText('Conciliada')
+  await row.getByRole('button', { name: new RegExp(`Desfazer conciliação de ${description}`, 'i') }).click()
+  await expect(page).toHaveURL(filteredUrl)
+  await expect(page.getByText(description)).toHaveCount(0)
+
+  await page.goto(`/transactions?search=${encodeURIComponent(description)}&reconciled=no`)
+  const pendingUrl = page.url()
+  row = page.getByRole('row').filter({ hasText: description })
+  await page.evaluate(() => document.documentElement.setAttribute('data-bs-theme', 'dark'))
+  const pendingBadge = row.getByText('Pendente', { exact: true })
+  const contrastRatio = await pendingBadge.evaluate(element => {
+    const parseColor = value => value.match(/[\d.]+/g).slice(0, 3).map(Number)
+    const luminance = color => {
+      const channels = color.map(value => {
+        const normalized = value / 255
+        return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4
+      })
+      return (0.2126 * channels[0]) + (0.7152 * channels[1]) + (0.0722 * channels[2])
+    }
+    const styles = getComputedStyle(element)
+    const foreground = luminance(parseColor(styles.color))
+    const background = luminance(parseColor(styles.backgroundColor))
+    return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05)
+  })
+  expect(contrastRatio).toBeGreaterThanOrEqual(4.5)
+  await row.getByRole('link', { name: new RegExp(`Editar ${description}`, 'i') }).click()
+  await expect(page.getByLabel('Transação conciliada')).not.toBeChecked()
+  await page.getByRole('link', { name: 'Cancelar' }).last().click()
+  await expect(page).toHaveURL(pendingUrl)
+
+  row = page.getByRole('row').filter({ hasText: description })
+  await row.getByRole('link', { name: new RegExp(`Editar ${description}`, 'i') }).click()
+  await page.getByLabel('Transação conciliada').check()
+  await page.getByRole('button', { name: 'Salvar alterações' }).click()
+  await expect(page).toHaveURL(pendingUrl)
+  await expect(page.getByText(description)).toHaveCount(0)
 
   const accessibility = await new AxeBuilder({ page }).disableRules(['color-contrast']).analyze()
   expect(accessibility.violations.filter(v => ['serious', 'critical'].includes(v.impact))).toEqual([])

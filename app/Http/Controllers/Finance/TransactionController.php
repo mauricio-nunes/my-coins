@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\FinanceStore;
 use App\Services\RecurringTransactionService;
 use App\Support\Money;
+use App\Support\TransactionListReturn;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -21,6 +22,7 @@ class TransactionController extends Controller
             'type' => ['nullable', 'in:income,expense,transfer'],
             'account_id' => ['nullable', 'integer'],
             'category_id' => ['nullable', 'integer'],
+            'reconciled' => ['nullable', 'in:yes,no'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
             'tags' => ['nullable', 'array', 'max:10'],
@@ -66,6 +68,7 @@ class TransactionController extends Controller
     }
 
     public function edit(
+        Request $request,
         int $transaction,
         FinanceStore $store,
         RecurringTransactionService $recurrences,
@@ -79,7 +82,10 @@ class TransactionController extends Controller
             ? $recurrences->findForUser(auth()->id(), $item['recurring_transaction_id'])
             : null;
 
-        return view('transactions.form', $this->formData($store) + compact('recurrence') + ['transaction' => $item]);
+        return view('transactions.form', $this->formData($store) + compact('recurrence') + [
+            'transaction' => $item,
+            'returnTo' => TransactionListReturn::from($request),
+        ]);
     }
 
     public function update(
@@ -104,7 +110,21 @@ class TransactionController extends Controller
             $store->update('transactions', $transaction, $attributes);
         }
 
-        return redirect()->route('transactions.show', $transaction)->with('success', 'Transação atualizada com sucesso.');
+        $returnTo = TransactionListReturn::from($request);
+
+        return ($returnTo ? redirect()->to($returnTo) : redirect()->route('transactions.show', $transaction))
+            ->with('success', 'Transação atualizada com sucesso.');
+    }
+
+    public function toggleReconciliation(Request $request, int $transaction, FinanceStore $store): RedirectResponse
+    {
+        $existing = $store->find('transactions', $transaction) ?? abort(404);
+        $reconciled = ! $existing['reconciled'];
+        $store->update('transactions', $transaction, ['reconciled' => $reconciled]);
+        $returnTo = TransactionListReturn::from($request);
+
+        return ($returnTo ? redirect()->to($returnTo) : redirect()->route('transactions.index'))
+            ->with('success', $reconciled ? 'Transação conciliada.' : 'Conciliação desfeita.');
     }
 
     public function destroy(
@@ -134,6 +154,7 @@ class TransactionController extends Controller
             'account_id' => ['required', 'integer'],
             'category_id' => ['required', 'integer'],
             'notes' => ['nullable', 'string', 'max:500'],
+            'reconciled' => ['nullable', 'boolean'],
             'tags' => ['nullable', 'array', 'max:50'],
             'tags.*' => ['required', 'string', 'max:30'],
         ]);
@@ -152,6 +173,7 @@ class TransactionController extends Controller
         $validated['account_id'] = (int) $validated['account_id'];
         $validated['category_id'] = (int) $validated['category_id'];
         $validated['notes'] ??= '';
+        $validated['reconciled'] = $request->boolean('reconciled');
         $tagNames = collect($validated['tags'] ?? [])->unique(fn (string $name): string => mb_strtolower(
             preg_replace('/\s+/u', ' ', trim($name)) ?? trim($name),
         ))->values();

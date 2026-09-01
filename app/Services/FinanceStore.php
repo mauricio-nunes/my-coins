@@ -116,6 +116,9 @@ class FinanceStore
             });
         });
         $query->when($filters['category_id'] ?? null, fn (Builder $query, mixed $id): Builder => $query->where('category_id', (int) $id));
+        if (isset($filters['reconciled'])) {
+            $query->where('reconciled', $filters['reconciled'] === 'yes');
+        }
         $query->when($filters['from'] ?? null, fn (Builder $query, string $date): Builder => $query->whereDate('date', '>=', $date));
         $query->when($filters['to'] ?? null, fn (Builder $query, string $date): Builder => $query->whereDate('date', '<=', $date));
         foreach (array_unique(array_map('intval', $filters['tag_ids'] ?? [])) as $tagId) {
@@ -270,8 +273,21 @@ class FinanceStore
             'income' => $income,
             'expenses' => $expenses,
             'result' => $income - $expenses,
-            'recent' => $this->transactions()->take(6),
+            'upcoming' => $this->upcomingTransactions(),
         ];
+    }
+
+    public function upcomingTransactions(int $limit = 10): Collection
+    {
+        return Transaction::query()
+            ->where('user_id', $this->userId())
+            ->whereDate('date', '>=', CarbonImmutable::today()->toDateString())
+            ->with('tags')
+            ->orderBy('date')
+            ->orderBy('id')
+            ->limit(max(1, $limit))
+            ->get()
+            ->map(fn (Transaction $transaction): array => $this->toArray($transaction));
     }
 
     public function dailyCashFlow(?CarbonImmutable $referenceDate = null): Collection

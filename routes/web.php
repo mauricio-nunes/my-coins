@@ -34,6 +34,7 @@ Route::middleware(['auth', 'password.changed'])->group(function (): void {
     Route::get('/transactions/import/review', [OfxImportController::class, 'review'])->name('imports.review');
     Route::post('/transactions/import', [OfxImportController::class, 'store'])->name('imports.store');
     Route::get('/transactions/import/result', [OfxImportController::class, 'result'])->name('imports.result');
+    Route::patch('/transactions/{transaction}/reconciliation', [TransactionController::class, 'toggleReconciliation'])->name('transactions.reconciliation');
     Route::resource('transactions', TransactionController::class);
     Route::patch('/recurrences/{recurrence}/resume', [RecurringTransactionController::class, 'resume'])->name('recurrences.resume');
     Route::resource('recurrences', RecurringTransactionController::class)->only(['index', 'edit', 'destroy']);
