@@ -69,9 +69,12 @@ abstract class TestCase extends BaseTestCase
             $transaction->tags()->sync($tags);
         }
         foreach ([['Moradia', 250000], ['Alimentação', 90000], ['Transporte', 45000], ['Lazer e compras', 35000]] as [$category, $limit]) {
-            Budget::create(['user_id' => $user->id, 'category_id' => $categoryIds[$category], 'month' => $today->format('Y-m'), 'limit' => $limit]);
+            $budget = Budget::create(['user_id' => $user->id, 'name' => $category, 'normalized_name' => mb_strtolower($category), 'active_name_key' => hash('sha256', implode('|', [$user->id, $today->format('Y-m'), mb_strtolower($category)])), 'month' => $today->format('Y-m'), 'limit' => $limit]);
+            $budget->categories()->attach($categoryIds[$category]);
         }
-        Budget::create(['user_id' => $user->id, 'category_id' => $categoryIds['Alimentação'], 'month' => $today->subMonth()->format('Y-m'), 'limit' => 85000]);
+        $previousMonth = $today->subMonth()->format('Y-m');
+        $budget = Budget::create(['user_id' => $user->id, 'name' => 'Alimentação', 'normalized_name' => 'alimentação', 'active_name_key' => hash('sha256', implode('|', [$user->id, $previousMonth, 'alimentação'])), 'month' => $previousMonth, 'limit' => 85000]);
+        $budget->categories()->attach($categoryIds['Alimentação']);
     }
 
     protected function categoryId(string $name): int

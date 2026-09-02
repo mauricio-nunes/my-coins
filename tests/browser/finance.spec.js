@@ -94,6 +94,34 @@ test('account balance date is visible and saved', async ({ page }, testInfo) => 
   await expect(page.getByText('15/08/2026')).toBeVisible()
 })
 
+test('budget monitoring supports grouped categories, edit, copy and deletion', async ({ page }, testInfo) => {
+  const name = `Planejamento ${testInfo.project.name}`
+  const destination = testInfo.project.name.toLowerCase().includes('mobile') ? '2099-12' : '2099-11'
+  await login(page)
+  await page.goto('/budgets')
+  await expect(page.getByRole('heading', { name: 'Monitoramento de orçamentos' })).toBeVisible()
+  await page.getByRole('link', { name: 'Novo orçamento' }).first().click()
+  await page.getByLabel('Nome').fill(name)
+  await page.locator('#category_ids').selectOption([{ label: 'Transporte' }, { label: 'Financeiro' }])
+  await page.getByLabel('Limite').fill('2.000,00')
+  await page.getByRole('button', { name: 'Criar orçamento' }).click()
+  await expect(page.getByText(name, { exact: true })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: 'Consumido' })).toBeVisible()
+  await expect(page.getByRole('row').filter({ hasText: name }).getByText('Financeiro, Transporte')).toBeVisible()
+  await page.getByRole('link', { name: `Editar ${name}` }).click()
+  await page.getByRole('button', { name: 'Salvar alterações' }).click()
+  await expect(page.getByText(name, { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: `Copiar ${name}` }).click()
+  await page.getByLabel('Mês de destino').fill(destination)
+  await page.getByRole('button', { name: 'Copiar orçamento' }).click()
+  await expect(page).toHaveURL(new RegExp(`budgets\\?month=${destination}`))
+  await expect(page.getByText(name, { exact: true })).toBeVisible()
+
+  page.once('dialog', dialog => dialog.accept())
+  await page.getByRole('button', { name: `Excluir ${name}` }).click()
+  await expect(page.getByText(name, { exact: true })).toHaveCount(0)
+})
+
 test('dashboard lists upcoming transactions and links to the current month', async ({ page }, testInfo) => {
   const description = `Próximo compromisso ${testInfo.project.name}`
   const upcomingDate = new Date(Date.now() + (2 * 24 * 60 * 60 * 1000)).toISOString().slice(0, 10)

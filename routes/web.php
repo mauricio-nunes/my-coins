@@ -45,6 +45,7 @@ Route::middleware(['auth', 'password.changed'])->group(function (): void {
     Route::put('/category-mappings/{category}', [AutomaticCategorizationController::class, 'update'])->name('category-mappings.update');
     Route::patch('/category-mappings/{category}/position', [AutomaticCategorizationController::class, 'move'])->name('category-mappings.move');
     Route::resource('tags', TagController::class)->only(['index', 'store', 'edit', 'update', 'destroy']);
+    Route::post('/budgets/{budget}/copy', [BudgetController::class, 'copy'])->name('budgets.copy');
     Route::resource('budgets', BudgetController::class)->except('show');
     Route::get('/reports', ReportController::class)->name('reports.index');
 });

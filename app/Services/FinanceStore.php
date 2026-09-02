@@ -323,7 +323,7 @@ class FinanceStore
     public function categoryIsUsed(int $id): bool
     {
         return Transaction::query()->where('user_id', $this->userId())->where('category_id', $id)->exists()
-            || Budget::query()->where('user_id', $this->userId())->where('category_id', $id)->exists()
+            || Budget::query()->where('user_id', $this->userId())->whereHas('categories', fn (Builder $query): Builder => $query->whereKey($id))->exists()
             || RecurringTransaction::query()->where('user_id', $this->userId())->where('category_id', $id)->where('status', 'active')->exists();
     }
 
@@ -431,8 +431,135 @@ class FinanceStore
 
     public function budgetSpent(array $budget): int
     {
-        return $this->transactions(['category_id' => $budget['category_id']])->where('type', 'expense')
-            ->filter(fn (array $item): bool => str_starts_with($item['date'], $budget['month']))->sum('amount');
+        return $this->budgetMetrics($budget)['spent'];
+    }
+
+    public function budgetsForMonth(string $month): Collection
+    {
+        return Budget::query()->where('user_id', $this->userId())->where('month', $month)
+            ->with(['categories' => fn ($query) => $query->orderBy('name')])
+            ->orderBy('name')->get()->map(fn (Budget $budget): array => $this->budgetMetrics($this->toArray($budget)));
+    }
+
+    public function budgetDetails(int $id): ?array
+    {
+        $budget = Budget::query()->where('user_id', $this->userId())
+            ->with(['categories' => fn ($query) => $query->orderBy('name')])->find($id);
+
+        return $budget ? $this->budgetMetrics($this->toArray($budget)) : null;
+    }
+
+    public function budgetNameExists(string $name, string $month, ?int $ignore = null): bool
+    {
+        return Budget::query()->where('user_id', $this->userId())->where('month', $month)
+            ->where('normalized_name', $this->normalizeBudgetName($name))
+            ->when($ignore, fn (Builder $query, int $id): Builder => $query->whereKeyNot($id))->exists();
+    }
+
+    public function createBudget(array $attributes): array
+    {
+        return DB::transaction(function () use ($attributes): array {
+            $categoryIds = $attributes['category_ids'];
+            unset($attributes['category_ids']);
+            $attributes = $this->prepareBudgetAttributes($attributes);
+            $budget = Budget::create($attributes + ['user_id' => $this->userId()]);
+            $budget->categories()->sync($categoryIds);
+
+            return $this->toArray($budget->load('categories'));
+        });
+    }
+
+    public function updateBudget(int $id, array $attributes): ?array
+    {
+        $budget = Budget::query()->where('user_id', $this->userId())->find($id);
+        if (! $budget) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($budget, $attributes): array {
+            $categoryIds = $attributes['category_ids'];
+            unset($attributes['category_ids']);
+            $budget->update($this->prepareBudgetAttributes($attributes));
+            $budget->categories()->sync($categoryIds);
+
+            return $this->toArray($budget->refresh()->load('categories'));
+        });
+    }
+
+    public function copyBudget(int $id, string $destinationMonth): ?array
+    {
+        $source = Budget::query()->where('user_id', $this->userId())->with('categories')->find($id);
+        if (! $source) {
+            return null;
+        }
+
+        return $this->createBudget([
+            'name' => $source->name,
+            'month' => $destinationMonth,
+            'limit' => (int) $source->limit,
+            'category_ids' => $source->categories->pluck('id')->all(),
+        ]);
+    }
+
+    public function deleteBudget(int $id): bool
+    {
+        $budget = Budget::query()->where('user_id', $this->userId())->find($id);
+        if (! $budget) {
+            return false;
+        }
+
+        return DB::transaction(function () use ($budget): bool {
+            $budget->active_name_key = null;
+            $budget->save();
+
+            return (bool) $budget->delete();
+        });
+    }
+
+    public function budgetMetrics(array $budget): array
+    {
+        $monthStart = CarbonImmutable::createFromFormat('Y-m-d', $budget['month'].'-01')->startOfMonth();
+        $monthEnd = $monthStart->endOfMonth();
+        $today = CarbonImmutable::today();
+        $isCurrent = $monthStart->format('Y-m') === $today->format('Y-m');
+        $isPast = $monthEnd->lt($today);
+        $cutoff = $isPast ? $monthEnd : ($isCurrent ? $today : $monthStart->subDay());
+        $categoryIds = array_map('intval', $budget['category_ids'] ?? collect($budget['categories'] ?? [])->pluck('id')->all());
+        $spent = $cutoff->gte($monthStart) && $categoryIds !== []
+            ? (int) Transaction::query()->where('user_id', $this->userId())->where('type', 'expense')
+                ->whereIn('category_id', $categoryIds)->whereDate('date', '>=', $monthStart->toDateString())
+                ->whereDate('date', '<=', $cutoff->toDateString())->sum('amount')
+            : 0;
+        $projection = $categoryIds !== []
+            ? (int) Transaction::query()->where('user_id', $this->userId())->where('type', 'expense')
+                ->whereIn('category_id', $categoryIds)->whereDate('date', '>=', $monthStart->toDateString())
+                ->whereDate('date', '<=', $monthEnd->toDateString())->sum('amount')
+            : 0;
+        $limit = (int) $budget['limit'];
+        $percentage = $limit > 0 ? ($spent / $limit) * 100 : 0.0;
+        $projectionPercentage = $limit > 0 ? ($projection / $limit) * 100 : 0.0;
+        $status = match (true) {
+            $projection > $limit => 'exceeded',
+            $projection * 10 > $limit * 9 => 'attention',
+            default => 'within',
+        };
+        $statusLabels = [
+            'within' => 'Dentro do limite',
+            'attention' => 'Atenção',
+            'exceeded' => 'Limite excedido',
+        ];
+
+        return $budget + [
+            'spent' => $spent,
+            'remaining' => $limit - $spent,
+            'percentage' => $percentage,
+            'progress' => min(100, max(0, (int) round($percentage))),
+            'projection' => $projection,
+            'projection_percentage' => $projectionPercentage,
+            'projection_progress' => min(100, max(0, (int) round($projectionPercentage))),
+            'status' => $status,
+            'status_label' => $statusLabels[$status],
+        ];
     }
 
     public function report(array $filters): array
@@ -534,6 +661,12 @@ class FinanceStore
                 ? $model->tags->pluck('id')->map(fn (int $id): int => $id)->all()
                 : $model->tags()->pluck('tags.id')->map(fn (int $id): int => $id)->all();
         }
+        if ($model instanceof Budget) {
+            $categories = $model->relationLoaded('categories') ? $model->categories : $model->categories()->orderBy('name')->get();
+            $attributes['categories'] = $categories->map(fn (Category $category): array => $this->toArray($category))->all();
+            $attributes['category_ids'] = $categories->pluck('id')->map(fn (int $id): int => $id)->all();
+            unset($attributes['normalized_name']);
+        }
 
         return $attributes;
     }
@@ -561,6 +694,24 @@ class FinanceStore
     private function normalizeTagName(string $name): string
     {
         return mb_strtolower($this->cleanTagName($name));
+    }
+
+    private function normalizeBudgetName(string $name): string
+    {
+        return mb_strtolower(Str::squish($name));
+    }
+
+    private function prepareBudgetAttributes(array $attributes): array
+    {
+        $attributes['name'] = Str::squish($attributes['name']);
+        $attributes['normalized_name'] = $this->normalizeBudgetName($attributes['name']);
+        $attributes['active_name_key'] = hash('sha256', implode('|', [
+            $this->userId(),
+            $attributes['month'],
+            $attributes['normalized_name'],
+        ]));
+
+        return $attributes;
     }
 
     private function userId(): int

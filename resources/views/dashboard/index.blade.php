@@ -90,8 +90,8 @@
                 <div class="card-header border-0 bg-transparent d-flex justify-content-between align-items-center"><h2 class="h5 mb-0">Orçamentos do mês</h2><a href="{{ route('budgets.index') }}" class="small">Gerenciar</a></div>
                 <div class="card-body">
                     @forelse ($budgets as $budget)
-                        @php($percent = min(100, round($budget['spent'] / $budget['limit'] * 100)))
-                        <div class="mb-4 {{ $loop->last ? 'mb-0' : '' }}"><div class="d-flex justify-content-between mb-2"><span class="fw-medium">{{ $budget['category']['name'] }}</span><span class="small text-body-secondary"><x-money :value="$budget['spent']" /> de <x-money :value="$budget['limit']" /></span></div><div class="progress" role="progressbar" aria-label="Orçamento de {{ $budget['category']['name'] }}" aria-valuenow="{{ $percent }}" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar {{ $percent >= 90 ? 'bg-danger' : ($percent >= 70 ? 'bg-warning' : 'bg-primary') }}" style="width: {{ $percent }}%"></div></div></div>
+                        @php($theme = ['within' => 'primary', 'attention' => 'warning', 'exceeded' => 'danger'][$budget['status']])
+                        <div class="mb-4 {{ $loop->last ? 'mb-0' : '' }}"><div class="d-flex justify-content-between mb-2"><span class="fw-medium text-body">{{ $budget['name'] }}</span><span class="small text-body-secondary"><x-money :value="$budget['spent']" /> de <x-money :value="$budget['limit']" /> · {{ number_format($budget['projection_percentage'], 1, ',', '.') }}%</span></div><div class="progress" role="progressbar" aria-label="Orçamento de {{ $budget['name'] }}" aria-valuenow="{{ $budget['projection_progress'] }}" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar bg-{{ $theme }}" style="width: {{ $budget['projection_progress'] }}%"></div></div><div class="small text-body-secondary mt-1">{{ $budget['status_label'] }}</div></div>
                     @empty <p class="text-body-secondary mb-0">Nenhum orçamento para este mês.</p> @endforelse
                 </div>
             </div>

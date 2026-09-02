@@ -205,13 +205,14 @@ class RecurringTransactionFlowTest extends TestCase
         $this->assertDatabaseHas('transactions', ['recurring_transaction_id' => $replacement->id, 'date' => '2026-09-01']);
     }
 
-    public function test_future_occurrences_feed_projections_and_budgets_but_not_current_balance(): void
+    public function test_future_occurrences_feed_account_projections_but_not_budget_actual_spending(): void
     {
         $this->freeze('2026-08-20');
         $this->signInWithFinanceData();
         $store = app(FinanceStore::class);
         $balanceBefore = $store->balance(1);
-        Budget::create(['user_id' => auth()->id(), 'category_id' => $this->categoryId('Alimentação'), 'month' => '2026-09', 'limit' => 50000]);
+        $budget = Budget::create(['user_id' => auth()->id(), 'name' => 'Alimentação', 'normalized_name' => 'alimentação', 'active_name_key' => hash('sha256', auth()->id().'|2026-09|alimentação'), 'month' => '2026-09', 'limit' => 50000]);
+        $budget->categories()->attach($this->categoryId('Alimentação'));
 
         $this->post('/transactions', $this->payload([
             'date' => '2026-09-10',
@@ -222,7 +223,8 @@ class RecurringTransactionFlowTest extends TestCase
         $budget = $store->all('budgets');
         $september = collect($budget)->firstWhere('month', '2026-09');
         $this->assertSame($balanceBefore, $store->balance(1));
-        $this->assertSame(10000, $store->budgetSpent($september));
+        $this->assertSame(0, $store->budgetSpent($september));
+        $this->assertSame(10000, $store->budgetMetrics($september)['projection']);
         $this->assertSame($balanceBefore - 10000, $store->balanceAt(1, '2026-09-10'));
     }
 

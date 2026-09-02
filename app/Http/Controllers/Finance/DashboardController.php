@@ -17,12 +17,7 @@ class DashboardController extends Controller
         );
         $accountMap = collect($store->all('accounts'))->keyBy('id');
         $categories = collect($store->all('categories'))->keyBy('id');
-        $budgets = collect($store->all('budgets'))->where('month', now()->format('Y-m'))->map(
-            fn (array $budget): array => $budget + [
-                'spent' => $store->budgetSpent($budget),
-                'category' => $categories->get($budget['category_id']),
-            ],
-        );
+        $budgets = $store->budgetsForMonth(now()->format('Y-m'));
         $report = $store->report([]);
         $cashFlowChart = [
             'chart' => ['type' => 'bar', 'height' => 300, 'toolbar' => ['show' => false]],
