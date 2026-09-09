@@ -37,6 +37,7 @@ class TransferController extends Controller
     {
         $item = $store->find('transactions', $transfer) ?? abort(404);
         abort_unless($item['type'] === 'transfer', 404);
+        abort_if($item['statement_payment'], 404);
 
         return view('transfers.form', [
             'transfer' => $item,
@@ -50,6 +51,7 @@ class TransferController extends Controller
     {
         $item = $store->find('transactions', $transfer) ?? abort(404);
         abort_unless($item['type'] === 'transfer', 404);
+        abort_if($item['statement_payment'], 404);
         $store->update('transactions', $transfer, $this->validated($request, $store, $item));
 
         $returnTo = TransactionListReturn::from($request);
@@ -73,10 +75,10 @@ class TransferController extends Controller
         $source = $store->find('accounts', $sourceId);
         $destination = $store->find('accounts', $destinationId);
 
-        if (! $source || ($source['archived'] && $sourceId !== ($existing['source_account_id'] ?? null))) {
+        if (! $source || $source['type'] === 'credit_card' || ($source['archived'] && $sourceId !== ($existing['source_account_id'] ?? null))) {
             throw ValidationException::withMessages(['source_account_id' => 'Selecione uma conta de origem ativa.']);
         }
-        if (! $destination || ($destination['archived'] && $destinationId !== ($existing['destination_account_id'] ?? null))) {
+        if (! $destination || $destination['type'] === 'credit_card' || ($destination['archived'] && $destinationId !== ($existing['destination_account_id'] ?? null))) {
             throw ValidationException::withMessages(['destination_account_id' => 'Selecione uma conta de destino ativa.']);
         }
 
@@ -105,7 +107,8 @@ class TransferController extends Controller
         $referenced = $transfer ? [$transfer['source_account_id'], $transfer['destination_account_id']] : [];
 
         return collect($store->all('accounts'))->filter(
-            fn (array $account): bool => ! $account['archived'] || in_array($account['id'], $referenced, true),
+            fn (array $account): bool => $account['type'] !== 'credit_card'
+                && (! $account['archived'] || in_array($account['id'], $referenced, true)),
         )->values();
     }
 }

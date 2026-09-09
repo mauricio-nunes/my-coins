@@ -7,7 +7,14 @@
             <i class="bi {{ $transaction['reconciled'] ? 'bi-arrow-counterclockwise' : 'bi-check2-circle' }}"></i>
         </button>
     </form>
-    <a href="{{ $isTransfer ? route('transfers.edit', ['transfer' => $transaction['id'], 'return_to' => $returnTo]) : route('transactions.edit', ['transaction' => $transaction['id'], 'return_to' => $returnTo]) }}" class="btn btn-sm btn-outline-secondary" aria-label="Editar {{ $description }}">
-        <i class="bi bi-pencil"></i>
+    @php
+        $managedRoute = $transaction['card_installment']
+            ? route('card-purchases.show', $transaction['card_installment']['purchase_id'])
+            : ($transaction['statement_payment']
+                ? route('credit-cards.show', ['credit_card' => $transaction['statement_payment']['credit_card_id'], 'statement' => $transaction['statement_payment']['statement_month']])
+                : ($isTransfer ? route('transfers.edit', ['transfer' => $transaction['id'], 'return_to' => $returnTo]) : route('transactions.edit', ['transaction' => $transaction['id'], 'return_to' => $returnTo])));
+    @endphp
+    <a href="{{ $managedRoute }}" class="btn btn-sm btn-outline-secondary" aria-label="{{ ($transaction['card_installment'] || $transaction['statement_payment']) ? 'Ver origem de' : 'Editar' }} {{ $description }}">
+        <i class="bi {{ ($transaction['card_installment'] || $transaction['statement_payment']) ? 'bi-box-arrow-up-right' : 'bi-pencil' }}"></i>
     </a>
 </div>

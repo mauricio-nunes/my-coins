@@ -60,8 +60,8 @@ test('login, navigation and persisted transaction flow are usable', async ({ pag
   await expect(page.getByRole('heading', { name: 'Fluxo de caixa diário' })).toBeVisible()
   const dailyChart = page.locator('[data-apexchart-currency="BRL"]')
   await expect(dailyChart).toHaveAttribute('data-apexchart-ready', 'true')
-  await expect(dailyChart.locator('.apexcharts-bar-series .apexcharts-series')).toHaveCount(2)
-  await expect(dailyChart.locator('.apexcharts-line-series .apexcharts-series')).toHaveCount(1)
+  await expect(dailyChart.locator('.apexcharts-bar-series .apexcharts-series')).toHaveCount(3)
+  await expect(dailyChart.locator('.apexcharts-line-series .apexcharts-series')).toHaveCount(2)
   await page.getByRole('link', { name: /Nova transação/i }).click()
   await page.getByLabel('Descrição').fill(description)
   await page.getByLabel('Valor').fill('25,90')
@@ -92,6 +92,45 @@ test('account balance date is visible and saved', async ({ page }, testInfo) => 
 
   await expect(page.getByRole('heading', { name: accountName })).toBeVisible()
   await expect(page.getByText('15/08/2026')).toBeVisible()
+})
+
+test('credit card purchase creates statement installments and tracks the limit', async ({ page }, testInfo) => {
+  const cardName = `Cartão UX ${testInfo.project.name}`
+  const purchaseName = `Notebook ${testInfo.project.name}`
+  await login(page)
+  await page.goto('/credit-cards/create')
+  await page.getByLabel('Nome do cartão').fill(cardName)
+  await page.getByLabel('Bandeira').fill('Visa')
+  await page.getByLabel('Limite total').fill('5000,00')
+  await page.getByLabel('Conta padrão para pagamento').selectOption({ index: 1 })
+  await page.getByLabel('Dia de fechamento').fill('20')
+  await page.getByLabel('Dia de vencimento').fill('27')
+  await page.getByRole('button', { name: 'Cadastrar cartão' }).click()
+
+  await expect(page.getByRole('heading', { name: cardName })).toBeVisible()
+  await expect(page.getByText('R$ 5.000,00').first()).toBeVisible()
+  await page.getByRole('link', { name: 'Nova compra' }).click()
+  await page.getByLabel('Descrição').fill(purchaseName)
+  await page.getByLabel('Valor total').fill('1200,00')
+  await page.getByLabel('Parcelas').fill('6')
+  await page.getByLabel('Categoria').selectOption({ label: 'Lazer e compras' })
+  await page.getByRole('button', { name: 'Registrar compra' }).click()
+
+  await expect(page.getByRole('heading', { name: purchaseName })).toBeVisible()
+  await expect(page.getByText('6x', { exact: true })).toBeVisible()
+  await expect(page.getByRole('row')).toHaveCount(7)
+  await page.getByRole('link', { name: 'Ver cartão' }).click()
+  await expect(page.getByText('R$ 3.800,00')).toBeVisible()
+  await expect(page.getByText(purchaseName)).toBeVisible()
+
+  await page.goto('/dashboard')
+  const statementsCard = page.locator('.card').filter({ has: page.getByRole('heading', { name: 'Próximas faturas' }) })
+  const statementRow = statementsCard.getByRole('row').filter({ hasText: cardName }).first()
+  await expect(statementRow).toBeVisible()
+  await expect(statementRow.getByText('R$ 200,00')).toBeVisible()
+
+  const accessibility = await new AxeBuilder({ page }).disableRules(['color-contrast']).analyze()
+  expect(accessibility.violations.filter(v => ['serious', 'critical'].includes(v.impact))).toEqual([])
 })
 
 test('budget monitoring supports grouped categories, edit, copy and deletion', async ({ page }, testInfo) => {
@@ -423,7 +462,7 @@ test('Inter OFX payment reaches the classification step as an expense', async ({
   await expect(row.getByText('R$ -45,90')).toBeVisible()
 })
 
-for (const path of ['/login', '/dashboard', '/transactions', '/transactions/import', '/transfers/create', '/recurrences', '/accounts', '/accounts/create', '/categories', '/category-mappings', '/tags', '/budgets', '/reports']) {
+for (const path of ['/login', '/dashboard', '/transactions', '/transactions/import', '/transfers/create', '/recurrences', '/accounts', '/accounts/create', '/credit-cards', '/credit-cards/create', '/categories', '/category-mappings', '/tags', '/budgets', '/reports']) {
   test(`${path} has no serious accessibility violations`, async ({ page }) => {
     if (path !== '/login') await login(page)
     await page.goto(path)

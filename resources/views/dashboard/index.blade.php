@@ -31,7 +31,7 @@
         <div class="col-xl-8">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header border-0 bg-transparent d-flex justify-content-between align-items-center">
-                    <div><h2 class="h5 mb-1">Fluxo de caixa</h2><span class="small text-body-secondary">Receitas e despesas por mês</span></div>
+                    <div><h2 class="h5 mb-1">Fluxo de caixa</h2><span class="small text-body-secondary">Entradas, saídas registradas e faturas previstas por mês</span></div>
                     <a href="{{ route('reports.index') }}" class="btn btn-sm btn-outline-secondary">Ver relatório</a>
                 </div>
                 <div class="card-body">
@@ -58,14 +58,32 @@
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-header border-0 bg-transparent">
             <h2 id="daily-cash-flow-title" class="h5 mb-1">Fluxo de caixa diário</h2>
-            <span class="small text-body-secondary">Receitas e despesas diárias com evolução do saldo</span>
+            <span class="small text-body-secondary">Movimentações registradas e impacto previsto das faturas no saldo</span>
         </div>
         <div class="card-body">
             <figure class="mb-0" aria-labelledby="daily-cash-flow-title">
                 <div data-apexchart data-apexchart-currency="BRL" data-apexchart-config="{{ json_encode($dailyCashFlowChart) }}"></div>
-                <figcaption class="visually-hidden">Gráfico de receitas e despesas diárias em barras e evolução do saldo no mês atual.</figcaption>
+                <figcaption class="visually-hidden">Gráfico diário de entradas, saídas registradas, faturas previstas, saldo em conta e saldo após faturas no mês atual.</figcaption>
             </figure>
+            <div class="small text-body-secondary mt-3"><i class="bi bi-info-circle me-1"></i>Faturas previstas são compromissos calculados e não novas despesas. Quando uma fatura é paga, sua previsão é substituída pela saída registrada.</div>
         </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header border-0 bg-transparent d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
+            <div><h2 class="h5 mb-1">Próximas faturas</h2><span class="small text-body-secondary">Comprometido em cartões: <strong class="text-body"><x-money :value="$cardCommitments['total']" /></strong></span></div>
+            <a href="{{ route('credit-cards.index') }}" class="btn btn-sm btn-outline-secondary">Ver cartões</a>
+        </div>
+        <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Cartão</th><th>Fatura</th><th>Vencimento</th><th>Situação</th><th class="text-end">Pendente</th></tr></thead><tbody>
+            @forelse ($cardCommitments['items'] as $statement)
+                @php
+                    $statementMonth = \Carbon\Carbon::createFromFormat('Y-m-d', $statement['month'].'-01');
+                @endphp
+                <tr><td><a class="fw-semibold text-body text-decoration-none" href="{{ route('credit-cards.show', ['credit_card' => $statement['credit_card_id'], 'statement' => $statement['month']]) }}"><span class="account-dot d-inline-block me-2" style="background: {{ $statement['card_color'] }}"></span>{{ $statement['card_name'] }}</a>@if($statement['card_archived'])<span class="badge text-bg-secondary ms-1">Arquivado</span>@endif</td><td>{{ $statementMonth->translatedFormat('F/Y') }}</td><td>{{ \Carbon\Carbon::parse($statement['due_date'])->format('d/m/Y') }}</td><td>@if($statement['overdue'])<span class="badge text-bg-danger">Vencida</span>@else<span class="badge {{ $statement['status'] === 'partially_paid' ? 'text-bg-info' : ($statement['status'] === 'closed' ? 'text-bg-warning' : 'text-bg-primary') }}">{{ $statement['status_label'] }}</span>@endif</td><td class="text-end fw-semibold"><x-money :value="$statement['outstanding']" /></td></tr>
+            @empty
+                <tr><td colspan="5" class="text-center py-4 text-body-secondary">Nenhuma fatura pendente.</td></tr>
+            @endforelse
+        </tbody></table></div>
     </div>
 
     <div class="row g-4">

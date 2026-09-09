@@ -41,7 +41,7 @@ class ReportController extends Controller
         return view('reports.index', [
             'report' => $report,
             'filters' => $filters,
-            'accounts' => collect($store->all('accounts')),
+            'accounts' => collect($store->all('accounts'))->where('type', '!=', 'credit_card'),
             'categories' => collect($store->all('categories')),
             'tags' => collect($store->all('tags'))->sortBy('name')->values(),
             'trendChart' => $trendChart,

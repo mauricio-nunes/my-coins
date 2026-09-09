@@ -74,6 +74,15 @@ class TransactionController extends Controller
         RecurringTransactionService $recurrences,
     ): View|RedirectResponse {
         $item = $store->find('transactions', $transaction) ?? abort(404);
+        if ($item['card_installment']) {
+            return redirect()->route('card-purchases.edit', $item['card_installment']['purchase_id']);
+        }
+        if ($item['statement_payment']) {
+            return redirect()->route('credit-cards.show', [
+                'credit_card' => $item['statement_payment']['credit_card_id'],
+                'statement' => $item['statement_payment']['statement_month'],
+            ]);
+        }
         if ($item['type'] === 'transfer') {
             return redirect()->route('transfers.edit', $transaction);
         }
@@ -95,6 +104,7 @@ class TransactionController extends Controller
         RecurringTransactionService $recurrences,
     ): RedirectResponse {
         $existing = $store->find('transactions', $transaction) ?? abort(404);
+        abort_if($existing['card_installment'] || $existing['statement_payment'], 404);
         abort_if($existing['type'] === 'transfer', 404);
         $attributes = $this->validated($request, $store);
         if ($existing['recurring_transaction_id'] && $request->input('recurrence_scope', 'single') === 'future') {
@@ -134,6 +144,10 @@ class TransactionController extends Controller
         RecurringTransactionService $recurrences,
     ): RedirectResponse {
         $existing = $store->find('transactions', $transaction) ?? abort(404);
+        if ($existing['card_installment'] || $existing['statement_payment']) {
+            return redirect()->route('transactions.show', $transaction)
+                ->with('warning', 'Este lançamento é gerenciado pelo cartão de crédito e não pode ser excluído isoladamente.');
+        }
         if ($existing['recurring_transaction_id'] && $request->input('recurrence_scope') === 'future') {
             abort_unless($recurrences->cancelFromOccurrence(auth()->id(), $transaction), 404);
 
@@ -162,6 +176,9 @@ class TransactionController extends Controller
         $category = $store->find('categories', (int) $validated['category_id']);
         if (! $account || $account['archived']) {
             throw ValidationException::withMessages(['account_id' => 'Selecione uma conta ativa.']);
+        }
+        if ($account['type'] === 'credit_card') {
+            throw ValidationException::withMessages(['account_id' => 'Registre compras de cartão na área Cartões de crédito.']);
         }
         if (! $category || $category['type'] !== $validated['type']) {
             throw ValidationException::withMessages(['category_id' => 'A categoria deve corresponder ao tipo da transação.']);
@@ -209,7 +226,7 @@ class TransactionController extends Controller
         return [
             'accounts' => collect($store->all('accounts'))->when(
                 ! $includeArchived,
-                fn ($accounts) => $accounts->where('archived', false),
+                fn ($accounts) => $accounts->where('archived', false)->where('type', '!=', 'credit_card'),
             )->values(),
             'categories' => collect($store->all('categories')),
             'tags' => collect($store->all('tags'))->sortBy('name')->values(),

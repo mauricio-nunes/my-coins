@@ -33,4 +33,9 @@ class Category extends Model
     {
         return $this->hasMany(RecurringTransaction::class);
     }
+
+    public function cardPurchases(): HasMany
+    {
+        return $this->hasMany(CardPurchase::class);
+    }
 }

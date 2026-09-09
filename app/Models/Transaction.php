@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Transaction extends Model
@@ -53,5 +54,15 @@ class Transaction extends Model
     public function recurrence(): BelongsTo
     {
         return $this->belongsTo(RecurringTransaction::class, 'recurring_transaction_id');
+    }
+
+    public function cardInstallment(): BelongsTo
+    {
+        return $this->belongsTo(CardInstallment::class);
+    }
+
+    public function statementPayment(): HasOne
+    {
+        return $this->hasOne(CardStatementPayment::class);
     }
 }
