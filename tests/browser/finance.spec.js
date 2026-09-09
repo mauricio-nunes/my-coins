@@ -200,13 +200,13 @@ test('recurring expense creates and exposes future occurrences', async ({ page }
   await page.goto('/transactions/create')
   await page.getByLabel('Descrição').fill(description)
   await page.getByLabel('Valor').fill('129,90')
-  await page.locator('#date').fill('2026-09-05')
+  await page.locator('#date').fill('2026-10-05')
   await page.getByLabel('Conta').selectOption('1')
   await page.getByLabel('Categoria').selectOption({ label: 'Saúde e cuidados pessoais' })
   await page.getByLabel('Repetir transação').check()
   await expect(page.getByLabel('Frequência')).toBeVisible()
   await page.getByLabel('Frequência').selectOption('monthly')
-  await page.getByLabel('Data final').fill('2026-12-05')
+  await page.getByLabel('Data final').fill('2027-01-05')
   await page.getByRole('button', { name: 'Adicionar transação' }).click()
 
   await expect(page.getByText('Mensal', { exact: true })).toBeVisible()
@@ -214,7 +214,7 @@ test('recurring expense creates and exposes future occurrences', async ({ page }
   const row = page.getByRole('row').filter({ hasText: description })
   await expect(row).toContainText('Mensal')
   await expect(row).toContainText('Ativa')
-  await expect(row).toContainText('05/09/2026')
+  await expect(row).toContainText('05/10/2026')
 })
 
 test('tags can be created inline, filtered and managed', async ({ page }, testInfo) => {
@@ -272,11 +272,16 @@ test('transactions can be filtered by category', async ({ page }) => {
   await page.goto('/transactions')
 
   const filters = page.locator('form[method="get"]')
+  await expect(filters.getByLabel('De', { exact: true })).not.toHaveValue('')
+  await expect(filters.getByLabel('Até', { exact: true })).not.toHaveValue('')
+  await expect(filters.getByLabel('Ordenar por data')).toHaveValue('desc')
   await filters.getByLabel('Categoria').selectOption({ label: 'Alimentação' })
+  await filters.getByLabel('Ordenar por data').selectOption('asc')
   await filters.getByRole('button', { name: 'Aplicar filtros' }).click()
 
   await expect(page).toHaveURL(/transactions\?.*category_id=\d+/)
   await expect(filters.getByLabel('Categoria')).toHaveValue(/\d+/)
+  await expect(filters.getByLabel('Ordenar por data')).toHaveValue('asc')
   const movements = page.locator('table')
   await expect(movements.getByText('Supermercado Vila')).toBeVisible()
   await expect(movements.getByText('Aluguel')).toHaveCount(0)
@@ -284,6 +289,51 @@ test('transactions can be filtered by category', async ({ page }) => {
 
   const accessibility = await new AxeBuilder({ page }).disableRules(['color-contrast']).analyze()
   expect(accessibility.violations.filter(v => ['serious', 'critical'].includes(v.impact))).toEqual([])
+})
+
+test('transaction details and deletion preserve the filtered list context', async ({ page }, testInfo) => {
+  const description = `Exclusão contextual ${testInfo.project.name} ${Date.now()}`
+  await login(page)
+  await page.goto('/transactions/create')
+  await page.getByLabel('Descrição').fill(description)
+  await page.getByLabel('Valor').fill('37,50')
+  await page.getByLabel('Conta').selectOption('1')
+  await page.getByLabel('Categoria').selectOption({ label: 'Alimentação' })
+  await page.getByRole('button', { name: /Adicionar transação/i }).click()
+
+  await page.goto('/transactions')
+  const filters = page.locator('form[data-filter-required]')
+  await filters.getByLabel('De', { exact: true }).fill('')
+  await filters.getByLabel('Até', { exact: true }).fill('')
+  await expect(filters.getByRole('button', { name: 'Aplicar filtros' })).toBeDisabled()
+  await expect(filters.getByText('Selecione ao menos um filtro')).toBeVisible()
+  await filters.getByLabel('Buscar').fill(description)
+  await filters.getByLabel('Ordenar por data').selectOption('asc')
+  await filters.getByRole('button', { name: 'Aplicar filtros' }).click()
+
+  const hasListContext = (url) => url.pathname === '/transactions'
+    && url.searchParams.get('search') === description
+    && url.searchParams.get('date_order') === 'asc'
+  let row = page.getByRole('row').filter({ hasText: description })
+  await row.getByRole('link', { name: description, exact: true }).click()
+  await expect(page).toHaveURL(/\/transactions\/\d+\?return_to=/)
+  await expect(page.locator('.content-header').getByRole('link', { name: 'Editar', exact: true })).toHaveCount(0)
+
+  const actions = page.locator('.card').filter({ has: page.getByRole('heading', { name: 'Ações' }) })
+  await actions.getByRole('button', { name: 'Conciliar transação' }).click()
+  await expect(page).toHaveURL(/\/transactions\/\d+\?return_to=/)
+  await expect(actions.getByRole('button', { name: 'Desfazer conciliação' })).toBeVisible()
+  await page.getByRole('link', { name: 'Voltar para transações' }).click()
+  await expect(page).toHaveURL(hasListContext)
+
+  row = page.getByRole('row').filter({ hasText: description })
+  page.once('dialog', async (dialog) => {
+    expect(dialog.message()).toBe('Excluir esta transação? O registro será preservado para auditoria.')
+    await dialog.accept()
+  })
+  await row.getByRole('button', { name: `Excluir ${description}` }).click()
+  await expect(page).toHaveURL(hasListContext)
+  await expect(page.getByText(description)).toHaveCount(0)
 })
 
 test('transactions can be reconciled while preserving list filters', async ({ page }, testInfo) => {
@@ -298,7 +348,7 @@ test('transactions can be reconciled while preserving list filters', async ({ pa
   await page.getByRole('button', { name: /Adicionar transação/i }).click()
   await expect(page.getByText('Conciliada', { exact: true })).toBeVisible()
 
-  await page.goto(`/transactions?search=${encodeURIComponent(description)}&reconciled=yes`)
+  await page.goto(`/transactions?search=${encodeURIComponent(description)}&reconciled=yes&date_order=desc`)
   const filteredUrl = page.url()
   let row = page.getByRole('row').filter({ hasText: description })
   await expect(row).toContainText('Conciliada')
@@ -306,7 +356,7 @@ test('transactions can be reconciled while preserving list filters', async ({ pa
   await expect(page).toHaveURL(filteredUrl)
   await expect(page.getByText(description)).toHaveCount(0)
 
-  await page.goto(`/transactions?search=${encodeURIComponent(description)}&reconciled=no`)
+  await page.goto(`/transactions?search=${encodeURIComponent(description)}&reconciled=no&date_order=desc`)
   const pendingUrl = page.url()
   row = page.getByRole('row').filter({ hasText: description })
   await page.evaluate(() => document.documentElement.setAttribute('data-bs-theme', 'dark'))

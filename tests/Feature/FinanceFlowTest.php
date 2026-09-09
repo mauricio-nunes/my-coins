@@ -47,6 +47,66 @@ class FinanceFlowTest extends TestCase
         $this->assertSoftDeleted('transactions', ['id' => 11, 'description' => 'Café atualizado']);
     }
 
+    public function test_transaction_list_defaults_to_current_month_requires_a_filter_and_sorts_by_date(): void
+    {
+        $this->signInWithFinanceData();
+        $categoryId = $this->categoryId('Alimentação');
+        $userId = auth()->id();
+        $currentMonth = now()->startOfMonth();
+        Transaction::create([
+            'user_id' => $userId,
+            'description' => 'Movimento anterior exclusivo',
+            'type' => 'expense',
+            'amount' => 1000,
+            'date' => $currentMonth->copy()->subMonth()->startOfMonth(),
+            'account_id' => 1,
+            'category_id' => $categoryId,
+            'notes' => '',
+        ]);
+        Transaction::create([
+            'user_id' => $userId,
+            'description' => 'Movimento mais antigo do mês',
+            'type' => 'expense',
+            'amount' => 1000,
+            'date' => $currentMonth->copy()->addDay(),
+            'account_id' => 1,
+            'category_id' => $categoryId,
+            'notes' => '',
+        ]);
+        Transaction::create([
+            'user_id' => $userId,
+            'description' => 'Movimento mais recente do mês',
+            'type' => 'expense',
+            'amount' => 1000,
+            'date' => $currentMonth->copy()->addDays(20),
+            'account_id' => 1,
+            'category_id' => $categoryId,
+            'notes' => '',
+        ]);
+
+        $this->get('/transactions')
+            ->assertOk()
+            ->assertSee('value="'.$currentMonth->copy()->startOfMonth()->toDateString().'"', false)
+            ->assertSee('value="'.$currentMonth->copy()->endOfMonth()->toDateString().'"', false)
+            ->assertSee('Movimento mais recente do mês')
+            ->assertDontSee('Movimento anterior exclusivo');
+
+        $period = [
+            'from' => $currentMonth->copy()->startOfMonth()->toDateString(),
+            'to' => $currentMonth->copy()->endOfMonth()->toDateString(),
+        ];
+        $this->get('/transactions?'.http_build_query($period + ['date_order' => 'asc']))
+            ->assertOk()
+            ->assertSeeInOrder(['Movimento mais antigo do mês', 'Movimento mais recente do mês']);
+        $this->get('/transactions?'.http_build_query($period + ['date_order' => 'desc']))
+            ->assertOk()
+            ->assertSeeInOrder(['Movimento mais recente do mês', 'Movimento mais antigo do mês']);
+
+        $this->get('/transactions?search=&type=&account_id=&category_id=&reconciled=&from=&to=&date_order=asc')
+            ->assertRedirect(route('transactions.index', $period + ['date_order' => 'desc']))
+            ->assertSessionHas('warning', 'Selecione ao menos um filtro para consultar as transações.');
+    }
+
     public function test_transactions_can_be_filtered_by_category(): void
     {
         $this->authenticated();

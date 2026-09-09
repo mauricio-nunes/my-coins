@@ -267,8 +267,35 @@ function initFinanceForms() {
 
   document.querySelectorAll('form[data-confirm]').forEach((form) => {
     form.addEventListener('submit', (event) => {
-      if (!window.confirm(form.dataset.confirm)) event.preventDefault()
+      const deletingFutureOccurrences = form.querySelector('[name="recurrence_scope"]')?.value === 'future'
+      const message = deletingFutureOccurrences && form.dataset.confirmFuture
+        ? form.dataset.confirmFuture
+        : form.dataset.confirm
+      if (!window.confirm(message)) event.preventDefault()
     })
+  })
+
+  document.querySelectorAll('form[data-filter-required]').forEach((form) => {
+    const criteria = [...form.querySelectorAll('[data-filter-criterion]')]
+    const submit = form.querySelector('[data-filter-submit]')
+    const feedback = form.querySelector('[data-filter-feedback]')
+    if (!submit) return
+
+    const hasCriteria = () => criteria.some((field) => {
+      if (field instanceof HTMLSelectElement && field.multiple) {
+        return [...field.selectedOptions].some((option) => option.value !== '')
+      }
+      return field.value.trim() !== ''
+    })
+    const syncFilterState = () => {
+      const enabled = hasCriteria()
+      submit.disabled = !enabled
+      feedback?.classList.toggle('d-none', enabled)
+    }
+
+    form.addEventListener('input', syncFilterState)
+    form.addEventListener('change', syncFilterState)
+    syncFilterState()
   })
 
   const type = document.querySelector('#type')

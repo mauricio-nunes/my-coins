@@ -17,4 +17,15 @@
     <a href="{{ $managedRoute }}" class="btn btn-sm btn-outline-secondary" aria-label="{{ ($transaction['card_installment'] || $transaction['statement_payment']) ? 'Ver origem de' : 'Editar' }} {{ $description }}">
         <i class="bi {{ ($transaction['card_installment'] || $transaction['statement_payment']) ? 'bi-box-arrow-up-right' : 'bi-pencil' }}"></i>
     </a>
+    @unless($transaction['card_installment'] || $transaction['statement_payment'])
+        <form method="post" action="{{ route('transactions.destroy', $transaction['id']) }}" data-confirm="{{ ($transaction['recurring_transaction_id'] ?? null) ? 'Excluir esta transação recorrente? Somente esta ocorrência será excluída. O registro será preservado para auditoria.' : 'Excluir esta transação? O registro será preservado para auditoria.' }}">
+            @csrf
+            @method('delete')
+            <input type="hidden" name="return_to" value="{{ $returnTo }}">
+            @if($transaction['recurring_transaction_id'] ?? null)<input type="hidden" name="recurrence_scope" value="single">@endif
+            <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Excluir {{ $description }}" title="Excluir">
+                <i class="bi bi-trash"></i>
+            </button>
+        </form>
+    @endunless
 </div>

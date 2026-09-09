@@ -135,7 +135,10 @@ class FinanceStore
             $query->whereHas('tags', fn (Builder $tags): Builder => $tags->whereKey($tagId));
         }
 
-        return $query->orderByDesc('date')->orderByDesc('id')->get()->map(fn (Transaction $transaction): array => $this->toArray($transaction));
+        $dateOrder = ($filters['date_order'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
+
+        return $query->orderBy('date', $dateOrder)->orderBy('id', $dateOrder)->get()
+            ->map(fn (Transaction $transaction): array => $this->toArray($transaction));
     }
 
     public function hasImportedOfxTransaction(int $accountId, array $transaction): bool

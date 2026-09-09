@@ -7,6 +7,7 @@ use App\Services\FinanceStore;
 use App\Services\RecurringTransactionService;
 use App\Support\Money;
 use App\Support\TransactionListReturn;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -15,7 +16,7 @@ use Illuminate\View\View;
 
 class TransactionController extends Controller
 {
-    public function index(Request $request, FinanceStore $store): View
+    public function index(Request $request, FinanceStore $store): View|RedirectResponse
     {
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:120'],
@@ -27,15 +28,46 @@ class TransactionController extends Controller
             'to' => ['nullable', 'date', 'after_or_equal:from'],
             'tags' => ['nullable', 'array', 'max:10'],
             'tags.*' => ['integer'],
-        ]);
-        $items = $store->transactions($filters + ['tag_ids' => $filters['tags'] ?? []]);
-        $page = LengthAwarePaginator::resolveCurrentPage();
-        $transactions = new LengthAwarePaginator($items->forPage($page, 8), $items->count(), 8, $page, [
-            'path' => $request->url(),
-            'query' => $request->query(),
+            'date_order' => ['nullable', 'in:asc,desc'],
         ]);
 
-        return view('transactions.index', $this->formData($store, true) + compact('transactions', 'filters'));
+        $filterKeys = ['search', 'type', 'account_id', 'category_id', 'reconciled', 'from', 'to', 'tags'];
+        $hasFilterInput = collect($filterKeys)->contains(fn (string $key): bool => $request->query->has($key));
+        $hasCriteria = collect($filterKeys)->contains(function (string $key) use ($filters): bool {
+            $value = $filters[$key] ?? null;
+
+            return is_array($value) ? $value !== [] : $value !== null && trim((string) $value) !== '';
+        });
+        $today = CarbonImmutable::today();
+        $currentMonth = [
+            'from' => $today->startOfMonth()->toDateString(),
+            'to' => $today->endOfMonth()->toDateString(),
+        ];
+
+        if ($hasFilterInput && ! $hasCriteria) {
+            return redirect()->route('transactions.index', $currentMonth + ['date_order' => 'desc'])
+                ->with('warning', 'Selecione ao menos um filtro para consultar as transações.');
+        }
+        if (! $hasCriteria) {
+            $filters = $currentMonth + $filters;
+        }
+        $filters['date_order'] ??= 'desc';
+
+        $items = $store->transactions($filters + ['tag_ids' => $filters['tags'] ?? []]);
+        $page = LengthAwarePaginator::resolveCurrentPage();
+        $listQuery = collect($filters)
+            ->reject(fn (mixed $value): bool => $value === null || $value === '' || $value === [])
+            ->all();
+        if ($page > 1) {
+            $listQuery['page'] = $page;
+        }
+        $returnTo = route('transactions.index', $listQuery, false);
+        $transactions = new LengthAwarePaginator($items->forPage($page, 8), $items->count(), 8, $page, [
+            'path' => $request->url(),
+            'query' => collect($listQuery)->except('page')->all(),
+        ]);
+
+        return view('transactions.index', $this->formData($store, true) + compact('transactions', 'filters', 'returnTo'));
     }
 
     public function create(FinanceStore $store): View
@@ -57,14 +89,22 @@ class TransactionController extends Controller
         );
     }
 
-    public function show(int $transaction, FinanceStore $store, RecurringTransactionService $recurrences): View
-    {
+    public function show(
+        Request $request,
+        int $transaction,
+        FinanceStore $store,
+        RecurringTransactionService $recurrences,
+    ): View {
         $item = $store->find('transactions', $transaction) ?? abort(404);
         $recurrence = $item['recurring_transaction_id']
             ? $recurrences->findForUser(auth()->id(), $item['recurring_transaction_id'])
             : null;
 
-        return view('transactions.show', $this->formData($store, true) + ['transaction' => $item, 'recurrence' => $recurrence]);
+        return view('transactions.show', $this->formData($store, true) + [
+            'transaction' => $item,
+            'recurrence' => $recurrence,
+            'returnTo' => TransactionListReturn::from($request),
+        ]);
     }
 
     public function edit(
@@ -133,6 +173,13 @@ class TransactionController extends Controller
         $store->update('transactions', $transaction, ['reconciled' => $reconciled]);
         $returnTo = TransactionListReturn::from($request);
 
+        if ($request->boolean('stay_on_detail')) {
+            return redirect()->route('transactions.show', array_filter([
+                'transaction' => $transaction,
+                'return_to' => $returnTo,
+            ]))->with('success', $reconciled ? 'Transação conciliada.' : 'Conciliação desfeita.');
+        }
+
         return ($returnTo ? redirect()->to($returnTo) : redirect()->route('transactions.index'))
             ->with('success', $reconciled ? 'Transação conciliada.' : 'Conciliação desfeita.');
     }
@@ -144,18 +191,24 @@ class TransactionController extends Controller
         RecurringTransactionService $recurrences,
     ): RedirectResponse {
         $existing = $store->find('transactions', $transaction) ?? abort(404);
+        $returnTo = TransactionListReturn::from($request);
         if ($existing['card_installment'] || $existing['statement_payment']) {
-            return redirect()->route('transactions.show', $transaction)
+            return redirect()->route('transactions.show', array_filter([
+                'transaction' => $transaction,
+                'return_to' => $returnTo,
+            ]))
                 ->with('warning', 'Este lançamento é gerenciado pelo cartão de crédito e não pode ser excluído isoladamente.');
         }
         if ($existing['recurring_transaction_id'] && $request->input('recurrence_scope') === 'future') {
             abort_unless($recurrences->cancelFromOccurrence(auth()->id(), $transaction), 404);
 
-            return redirect()->route('transactions.index')->with('success', 'Esta ocorrência e as próximas foram canceladas. O histórico foi preservado.');
+            return ($returnTo ? redirect()->to($returnTo) : redirect()->route('transactions.index'))
+                ->with('success', 'Esta ocorrência e as próximas foram canceladas. O histórico foi preservado.');
         }
         abort_unless($store->delete('transactions', $transaction), 404);
 
-        return redirect()->route('transactions.index')->with('success', 'Transação excluída. O registro foi preservado para auditoria.');
+        return ($returnTo ? redirect()->to($returnTo) : redirect()->route('transactions.index'))
+            ->with('success', 'Transação excluída. O registro foi preservado para auditoria.');
     }
 
     private function validated(Request $request, FinanceStore $store): array
