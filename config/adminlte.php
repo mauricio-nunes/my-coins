@@ -66,6 +66,7 @@ return [
         ['text' => 'Importar OFX', 'route' => 'imports.create', 'active' => ['imports*'], 'icon' => 'bi bi-file-earmark-arrow-up'],
         ['text' => 'Transferir', 'route' => 'transfers.create', 'active' => ['transfers*'], 'icon' => 'bi bi-arrow-right-circle'],
         ['text' => 'Contas', 'route' => 'accounts.index', 'active' => ['accounts*'], 'icon' => 'bi bi-wallet2'],
+        ['text' => 'Cartões de crédito', 'route' => 'credit-cards.index', 'active' => ['credit-cards*', 'card-purchases*', 'card-statements*'], 'icon' => 'bi bi-credit-card-2-front'],
         ['text' => 'Categorias', 'route' => 'categories.index', 'active' => ['categories*'], 'icon' => 'bi bi-tags'],
         ['text' => 'Categorização automática', 'route' => 'category-mappings.index', 'active' => ['category-mappings*'], 'icon' => 'bi bi-magic'],
         ['text' => 'Tags', 'route' => 'tags.index', 'active' => ['tags*'], 'icon' => 'bi bi-hash'],

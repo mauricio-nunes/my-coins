@@ -76,12 +76,15 @@ class BrowserTestSeeder extends Seeder
             'destination_account_id' => $accounts[1]->id,
         ]);
         foreach ([['Moradia', 250000], ['Alimentação', 90000], ['Transporte', 45000], ['Lazer e compras', 35000]] as [$category, $limit]) {
-            Budget::create([
+            $budget = Budget::create([
                 'user_id' => $user->id,
-                'category_id' => $categories[$category]->id,
+                'name' => $category,
+                'normalized_name' => mb_strtolower($category),
+                'active_name_key' => hash('sha256', implode('|', [$user->id, $today->format('Y-m'), mb_strtolower($category)])),
                 'month' => $today->format('Y-m'),
                 'limit' => $limit,
             ]);
+            $budget->categories()->attach($categories[$category]->id);
         }
     }
 }

@@ -52,16 +52,18 @@ class DashboardDailyCashFlowTest extends TestCase
         $points = app(FinanceStore::class)->dailyCashFlow(CarbonImmutable::parse('2026-08-15'));
 
         $this->assertCount(31, $points);
-        $this->assertSame(['date' => '2026-08-01', 'income' => 0, 'expense' => 10000, 'balance' => 150000], $points[0]);
-        $this->assertSame(['date' => '2026-08-02', 'income' => 30000, 'expense' => 0, 'balance' => 180000], $points[1]);
-        $this->assertSame(['date' => '2026-08-03', 'income' => 0, 'expense' => 0, 'balance' => 180000], $points[2]);
+        $this->assertSame(['date' => '2026-08-01', 'income' => 0, 'expense' => 10000, 'card_statements' => 0, 'balance' => 150000, 'balance_after_cards' => 150000], $points[0]);
+        $this->assertSame(['date' => '2026-08-02', 'income' => 30000, 'expense' => 0, 'card_statements' => 0, 'balance' => 180000, 'balance_after_cards' => 180000], $points[1]);
+        $this->assertSame(['date' => '2026-08-03', 'income' => 0, 'expense' => 0, 'card_statements' => 0, 'balance' => 180000, 'balance_after_cards' => 180000], $points[2]);
         $this->assertSame(180000, $points->firstWhere('date', '2026-08-03')['balance']);
         $this->assertSame(180000, $points->firstWhere('date', '2026-08-10')['balance']);
         $this->assertSame([
             'date' => '2026-08-20',
             'income' => 0,
             'expense' => 5000,
+            'card_statements' => 0,
             'balance' => 175000,
+            'balance_after_cards' => 175000,
         ], $points->firstWhere('date', '2026-08-20'));
         $this->assertSame(175000, $points->last()['balance']);
     }
@@ -102,9 +104,12 @@ class DashboardDailyCashFlowTest extends TestCase
         $this->get('/dashboard')
             ->assertOk()
             ->assertSee('Fluxo de caixa diário')
-            ->assertSee('Receitas')
-            ->assertSee('Despesas')
-            ->assertSee('Saldo')
+            ->assertSee('Entradas')
+            ->assertSee('saídas registradas')
+            ->assertSee('faturas previstas')
+            ->assertSee('Saldo em conta')
+            ->assertSee('saldo após faturas')
+            ->assertSee('Próximas faturas')
             ->assertSee('&quot;type&quot;:&quot;column&quot;', false)
             ->assertSee('&quot;type&quot;:&quot;line&quot;', false)
             ->assertSee('data-apexchart-currency="BRL"', false);

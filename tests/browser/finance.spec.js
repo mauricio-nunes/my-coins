@@ -60,8 +60,8 @@ test('login, navigation and persisted transaction flow are usable', async ({ pag
   await expect(page.getByRole('heading', { name: 'Fluxo de caixa diário' })).toBeVisible()
   const dailyChart = page.locator('[data-apexchart-currency="BRL"]')
   await expect(dailyChart).toHaveAttribute('data-apexchart-ready', 'true')
-  await expect(dailyChart.locator('.apexcharts-bar-series .apexcharts-series')).toHaveCount(2)
-  await expect(dailyChart.locator('.apexcharts-line-series .apexcharts-series')).toHaveCount(1)
+  await expect(dailyChart.locator('.apexcharts-bar-series .apexcharts-series')).toHaveCount(3)
+  await expect(dailyChart.locator('.apexcharts-line-series .apexcharts-series')).toHaveCount(2)
   await page.getByRole('link', { name: /Nova transação/i }).click()
   await page.getByLabel('Descrição').fill(description)
   await page.getByLabel('Valor').fill('25,90')
@@ -92,6 +92,73 @@ test('account balance date is visible and saved', async ({ page }, testInfo) => 
 
   await expect(page.getByRole('heading', { name: accountName })).toBeVisible()
   await expect(page.getByText('15/08/2026')).toBeVisible()
+})
+
+test('credit card purchase creates statement installments and tracks the limit', async ({ page }, testInfo) => {
+  const cardName = `Cartão UX ${testInfo.project.name}`
+  const purchaseName = `Notebook ${testInfo.project.name}`
+  await login(page)
+  await page.goto('/credit-cards/create')
+  await page.getByLabel('Nome do cartão').fill(cardName)
+  await page.getByLabel('Bandeira').fill('Visa')
+  await page.getByLabel('Limite total').fill('5000,00')
+  await page.getByLabel('Conta padrão para pagamento').selectOption({ index: 1 })
+  await page.getByLabel('Dia de fechamento').fill('20')
+  await page.getByLabel('Dia de vencimento').fill('27')
+  await page.getByRole('button', { name: 'Cadastrar cartão' }).click()
+
+  await expect(page.getByRole('heading', { name: cardName })).toBeVisible()
+  await expect(page.getByText('R$ 5.000,00').first()).toBeVisible()
+  await page.getByRole('link', { name: 'Nova compra' }).click()
+  await page.getByLabel('Descrição').fill(purchaseName)
+  await page.getByLabel('Valor total').fill('1200,00')
+  await page.getByLabel('Parcelas').fill('6')
+  await page.getByLabel('Categoria').selectOption({ label: 'Lazer e compras' })
+  await page.getByRole('button', { name: 'Registrar compra' }).click()
+
+  await expect(page.getByRole('heading', { name: purchaseName })).toBeVisible()
+  await expect(page.getByText('6x', { exact: true })).toBeVisible()
+  await expect(page.getByRole('row')).toHaveCount(7)
+  await page.getByRole('link', { name: 'Ver cartão' }).click()
+  await expect(page.getByText('R$ 3.800,00')).toBeVisible()
+  await expect(page.getByText(purchaseName)).toBeVisible()
+
+  await page.goto('/dashboard')
+  const statementsCard = page.locator('.card').filter({ has: page.getByRole('heading', { name: 'Próximas faturas' }) })
+  const statementRow = statementsCard.getByRole('row').filter({ hasText: cardName }).first()
+  await expect(statementRow).toBeVisible()
+  await expect(statementRow.getByText('R$ 200,00')).toBeVisible()
+
+  const accessibility = await new AxeBuilder({ page }).disableRules(['color-contrast']).analyze()
+  expect(accessibility.violations.filter(v => ['serious', 'critical'].includes(v.impact))).toEqual([])
+})
+
+test('budget monitoring supports grouped categories, edit, copy and deletion', async ({ page }, testInfo) => {
+  const name = `Planejamento ${testInfo.project.name}`
+  const destination = testInfo.project.name.toLowerCase().includes('mobile') ? '2099-12' : '2099-11'
+  await login(page)
+  await page.goto('/budgets')
+  await expect(page.getByRole('heading', { name: 'Monitoramento de orçamentos' })).toBeVisible()
+  await page.getByRole('link', { name: 'Novo orçamento' }).first().click()
+  await page.getByLabel('Nome').fill(name)
+  await page.locator('#category_ids').selectOption([{ label: 'Transporte' }, { label: 'Financeiro' }])
+  await page.getByLabel('Limite').fill('2.000,00')
+  await page.getByRole('button', { name: 'Criar orçamento' }).click()
+  await expect(page.getByText(name, { exact: true })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: 'Consumido' })).toBeVisible()
+  await expect(page.getByRole('row').filter({ hasText: name }).getByText('Financeiro, Transporte')).toBeVisible()
+  await page.getByRole('link', { name: `Editar ${name}` }).click()
+  await page.getByRole('button', { name: 'Salvar alterações' }).click()
+  await expect(page.getByText(name, { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: `Copiar ${name}` }).click()
+  await page.getByLabel('Mês de destino').fill(destination)
+  await page.getByRole('button', { name: 'Copiar orçamento' }).click()
+  await expect(page).toHaveURL(new RegExp(`budgets\\?month=${destination}`))
+  await expect(page.getByText(name, { exact: true })).toBeVisible()
+
+  page.once('dialog', dialog => dialog.accept())
+  await page.getByRole('button', { name: `Excluir ${name}` }).click()
+  await expect(page.getByText(name, { exact: true })).toHaveCount(0)
 })
 
 test('dashboard lists upcoming transactions and links to the current month', async ({ page }, testInfo) => {
@@ -133,13 +200,13 @@ test('recurring expense creates and exposes future occurrences', async ({ page }
   await page.goto('/transactions/create')
   await page.getByLabel('Descrição').fill(description)
   await page.getByLabel('Valor').fill('129,90')
-  await page.locator('#date').fill('2026-09-05')
+  await page.locator('#date').fill('2026-10-05')
   await page.getByLabel('Conta').selectOption('1')
   await page.getByLabel('Categoria').selectOption({ label: 'Saúde e cuidados pessoais' })
   await page.getByLabel('Repetir transação').check()
   await expect(page.getByLabel('Frequência')).toBeVisible()
   await page.getByLabel('Frequência').selectOption('monthly')
-  await page.getByLabel('Data final').fill('2026-12-05')
+  await page.getByLabel('Data final').fill('2027-01-05')
   await page.getByRole('button', { name: 'Adicionar transação' }).click()
 
   await expect(page.getByText('Mensal', { exact: true })).toBeVisible()
@@ -147,7 +214,7 @@ test('recurring expense creates and exposes future occurrences', async ({ page }
   const row = page.getByRole('row').filter({ hasText: description })
   await expect(row).toContainText('Mensal')
   await expect(row).toContainText('Ativa')
-  await expect(row).toContainText('05/09/2026')
+  await expect(row).toContainText('05/10/2026')
 })
 
 test('tags can be created inline, filtered and managed', async ({ page }, testInfo) => {
@@ -205,11 +272,16 @@ test('transactions can be filtered by category', async ({ page }) => {
   await page.goto('/transactions')
 
   const filters = page.locator('form[method="get"]')
+  await expect(filters.getByLabel('De', { exact: true })).not.toHaveValue('')
+  await expect(filters.getByLabel('Até', { exact: true })).not.toHaveValue('')
+  await expect(filters.getByLabel('Ordenar por data')).toHaveValue('desc')
   await filters.getByLabel('Categoria').selectOption({ label: 'Alimentação' })
+  await filters.getByLabel('Ordenar por data').selectOption('asc')
   await filters.getByRole('button', { name: 'Aplicar filtros' }).click()
 
   await expect(page).toHaveURL(/transactions\?.*category_id=\d+/)
   await expect(filters.getByLabel('Categoria')).toHaveValue(/\d+/)
+  await expect(filters.getByLabel('Ordenar por data')).toHaveValue('asc')
   const movements = page.locator('table')
   await expect(movements.getByText('Supermercado Vila')).toBeVisible()
   await expect(movements.getByText('Aluguel')).toHaveCount(0)
@@ -217,6 +289,51 @@ test('transactions can be filtered by category', async ({ page }) => {
 
   const accessibility = await new AxeBuilder({ page }).disableRules(['color-contrast']).analyze()
   expect(accessibility.violations.filter(v => ['serious', 'critical'].includes(v.impact))).toEqual([])
+})
+
+test('transaction details and deletion preserve the filtered list context', async ({ page }, testInfo) => {
+  const description = `Exclusão contextual ${testInfo.project.name} ${Date.now()}`
+  await login(page)
+  await page.goto('/transactions/create')
+  await page.getByLabel('Descrição').fill(description)
+  await page.getByLabel('Valor').fill('37,50')
+  await page.getByLabel('Conta').selectOption('1')
+  await page.getByLabel('Categoria').selectOption({ label: 'Alimentação' })
+  await page.getByRole('button', { name: /Adicionar transação/i }).click()
+
+  await page.goto('/transactions')
+  const filters = page.locator('form[data-filter-required]')
+  await filters.getByLabel('De', { exact: true }).fill('')
+  await filters.getByLabel('Até', { exact: true }).fill('')
+  await expect(filters.getByRole('button', { name: 'Aplicar filtros' })).toBeDisabled()
+  await expect(filters.getByText('Selecione ao menos um filtro')).toBeVisible()
+  await filters.getByLabel('Buscar').fill(description)
+  await filters.getByLabel('Ordenar por data').selectOption('asc')
+  await filters.getByRole('button', { name: 'Aplicar filtros' }).click()
+
+  const hasListContext = (url) => url.pathname === '/transactions'
+    && url.searchParams.get('search') === description
+    && url.searchParams.get('date_order') === 'asc'
+  let row = page.getByRole('row').filter({ hasText: description })
+  await row.getByRole('link', { name: description, exact: true }).click()
+  await expect(page).toHaveURL(/\/transactions\/\d+\?return_to=/)
+  await expect(page.locator('.content-header').getByRole('link', { name: 'Editar', exact: true })).toHaveCount(0)
+
+  const actions = page.locator('.card').filter({ has: page.getByRole('heading', { name: 'Ações' }) })
+  await actions.getByRole('button', { name: 'Conciliar transação' }).click()
+  await expect(page).toHaveURL(/\/transactions\/\d+\?return_to=/)
+  await expect(actions.getByRole('button', { name: 'Desfazer conciliação' })).toBeVisible()
+  await page.getByRole('link', { name: 'Voltar para transações' }).click()
+  await expect(page).toHaveURL(hasListContext)
+
+  row = page.getByRole('row').filter({ hasText: description })
+  page.once('dialog', async (dialog) => {
+    expect(dialog.message()).toBe('Excluir esta transação? O registro será preservado para auditoria.')
+    await dialog.accept()
+  })
+  await row.getByRole('button', { name: `Excluir ${description}` }).click()
+  await expect(page).toHaveURL(hasListContext)
+  await expect(page.getByText(description)).toHaveCount(0)
 })
 
 test('transactions can be reconciled while preserving list filters', async ({ page }, testInfo) => {
@@ -231,7 +348,7 @@ test('transactions can be reconciled while preserving list filters', async ({ pa
   await page.getByRole('button', { name: /Adicionar transação/i }).click()
   await expect(page.getByText('Conciliada', { exact: true })).toBeVisible()
 
-  await page.goto(`/transactions?search=${encodeURIComponent(description)}&reconciled=yes`)
+  await page.goto(`/transactions?search=${encodeURIComponent(description)}&reconciled=yes&date_order=desc`)
   const filteredUrl = page.url()
   let row = page.getByRole('row').filter({ hasText: description })
   await expect(row).toContainText('Conciliada')
@@ -239,7 +356,7 @@ test('transactions can be reconciled while preserving list filters', async ({ pa
   await expect(page).toHaveURL(filteredUrl)
   await expect(page.getByText(description)).toHaveCount(0)
 
-  await page.goto(`/transactions?search=${encodeURIComponent(description)}&reconciled=no`)
+  await page.goto(`/transactions?search=${encodeURIComponent(description)}&reconciled=no&date_order=desc`)
   const pendingUrl = page.url()
   row = page.getByRole('row').filter({ hasText: description })
   await page.evaluate(() => document.documentElement.setAttribute('data-bs-theme', 'dark'))
@@ -395,7 +512,7 @@ test('Inter OFX payment reaches the classification step as an expense', async ({
   await expect(row.getByText('R$ -45,90')).toBeVisible()
 })
 
-for (const path of ['/login', '/dashboard', '/transactions', '/transactions/import', '/transfers/create', '/recurrences', '/accounts', '/accounts/create', '/categories', '/category-mappings', '/tags', '/budgets', '/reports']) {
+for (const path of ['/login', '/dashboard', '/transactions', '/transactions/import', '/transfers/create', '/recurrences', '/accounts', '/accounts/create', '/credit-cards', '/credit-cards/create', '/categories', '/category-mappings', '/tags', '/budgets', '/reports']) {
   test(`${path} has no serious accessibility violations`, async ({ page }) => {
     if (path !== '/login') await login(page)
     await page.goto(path)

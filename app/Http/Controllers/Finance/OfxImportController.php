@@ -32,7 +32,7 @@ class OfxImportController extends Controller
             'label' => ['required', 'string', 'max:30'],
         ]);
         $account = $store->find('accounts', (int) $validated['account_id']);
-        if (! $account || $account['archived']) {
+        if (! $account || $account['archived'] || $account['type'] === 'credit_card') {
             throw ValidationException::withMessages(['account_id' => 'Selecione uma conta ativa.']);
         }
 
@@ -83,7 +83,7 @@ class OfxImportController extends Controller
         }
 
         $account = $store->find('accounts', $draft['account_id']);
-        if (! $account || $account['archived']) {
+        if (! $account || $account['archived'] || $account['type'] === 'credit_card') {
             $request->session()->forget(self::DRAFT_KEY);
 
             return redirect()->route('imports.create')->with('warning', 'A conta selecionada não está mais disponível.');
@@ -92,7 +92,7 @@ class OfxImportController extends Controller
         return view('imports.review', [
             'draft' => $draft,
             'account' => $account,
-            'accounts' => collect($store->all('accounts'))->where('archived', false)->values(),
+            'accounts' => collect($store->all('accounts'))->where('archived', false)->where('type', '!=', 'credit_card')->values(),
             'categories' => collect($store->all('categories')),
         ]);
     }
@@ -119,7 +119,7 @@ class OfxImportController extends Controller
         }
 
         $account = $store->find('accounts', $draft['account_id']);
-        if (! $account || $account['archived']) {
+        if (! $account || $account['archived'] || $account['type'] === 'credit_card') {
             throw ValidationException::withMessages(['account' => 'A conta selecionada não está mais ativa.']);
         }
 
@@ -165,7 +165,7 @@ class OfxImportController extends Controller
                 }
                 $destinationId = (int) ($decision['destination_account_id'] ?? 0);
                 $destination = $store->find('accounts', $destinationId);
-                if (! $destination || $destination['archived'] || $destinationId === $account['id']) {
+                if (! $destination || $destination['archived'] || $destination['type'] === 'credit_card' || $destinationId === $account['id']) {
                     $errors["rows.{$index}.destination_account_id"] = 'Selecione outra conta ativa como destino.';
 
                     continue;
@@ -231,7 +231,7 @@ class OfxImportController extends Controller
     private function formData(FinanceStore $store): array
     {
         return [
-            'accounts' => collect($store->all('accounts'))->where('archived', false)->values(),
+            'accounts' => collect($store->all('accounts'))->where('archived', false)->where('type', '!=', 'credit_card')->values(),
             'tags' => collect($store->all('tags'))->sortBy('name')->values(),
             'bankFormats' => OfxParser::supportedBanks(),
         ];

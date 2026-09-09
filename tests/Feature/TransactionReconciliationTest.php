@@ -92,6 +92,68 @@ class TransactionReconciliationTest extends TestCase
             ->assertRedirect($transferReturn);
     }
 
+    public function test_details_actions_preserve_list_context_and_reconciliation_stays_on_details(): void
+    {
+        $this->signInWithFinanceData();
+        $returnTo = '/transactions?type=expense&account_id=1&date_order=asc&page=2';
+        $detailsUrl = '/transactions/3?'.http_build_query(['return_to' => $returnTo]);
+
+        $this->get($detailsUrl)
+            ->assertOk()
+            ->assertSee('Voltar para transações')
+            ->assertSee($returnTo)
+            ->assertSee('name="stay_on_detail" value="1"', false)
+            ->assertSee('Conciliar transação')
+            ->assertSee('Editar transação')
+            ->assertSee('Excluir transação')
+            ->assertDontSee('btn btn-primary', false);
+
+        $this->patch('/transactions/3/reconciliation', [
+            'return_to' => $returnTo,
+            'stay_on_detail' => '1',
+        ])->assertRedirect($detailsUrl);
+        $this->assertDatabaseHas('transactions', ['id' => 3, 'reconciled' => true]);
+
+        $this->delete('/transactions/3', [
+            'return_to' => $returnTo,
+        ])->assertRedirect($returnTo);
+        $this->assertSoftDeleted('transactions', ['id' => 3]);
+    }
+
+    public function test_transaction_list_exposes_audited_delete_and_recurring_delete_targets_only_one_occurrence(): void
+    {
+        $this->signInWithFinanceData();
+
+        $this->get('/transactions?search=Farmácia')
+            ->assertOk()
+            ->assertSee('Excluir Farmácia')
+            ->assertSee('Excluir esta transação? O registro será preservado para auditoria.');
+
+        $this->post('/transactions', $this->transactionPayload([
+            'description' => 'Recorrência para exclusão',
+            'recurring' => '1',
+            'frequency' => 'monthly',
+            'recurrence_end_date' => now()->addMonth()->toDateString(),
+        ]))->assertSessionHasNoErrors();
+        $occurrence = Transaction::query()->where('description', 'Recorrência para exclusão')->firstOrFail();
+
+        $this->get('/transactions?search=Recorrência%20para%20exclusão')
+            ->assertOk()
+            ->assertSee('Excluir esta transação recorrente? Somente esta ocorrência será excluída. O registro será preservado para auditoria.')
+            ->assertSee('name="recurrence_scope" value="single"', false);
+
+        $returnTo = '/transactions?search=Recorrência%20para%20exclusão&date_order=desc';
+        $this->delete("/transactions/{$occurrence->id}", [
+            'recurrence_scope' => 'single',
+            'return_to' => $returnTo,
+        ])->assertRedirect($returnTo);
+        $this->assertSoftDeleted('transactions', ['id' => $occurrence->id]);
+        $this->assertDatabaseHas('transactions', [
+            'recurring_transaction_id' => $occurrence->recurring_transaction_id,
+            'deleted_at' => null,
+        ]);
+    }
+
     public function test_return_target_is_restricted_to_the_transaction_list(): void
     {
         $this->signInWithFinanceData();

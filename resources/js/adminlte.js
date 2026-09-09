@@ -6,7 +6,7 @@
  */
 
 // Bootstrap (provides dropdowns, modals, tooltips, offcanvas, etc.)
-import 'bootstrap'
+import * as bootstrap from 'bootstrap'
 
 // OverlayScrollbars — AdminLTE uses it for the sidebar scroller (optional)
 import { OverlayScrollbars } from 'overlayscrollbars'
@@ -19,6 +19,7 @@ import TomSelect from 'tom-select'
 
 window.ApexCharts = ApexCharts
 window.TomSelect = TomSelect
+window.bootstrap = bootstrap
 
 /**
  * Initialise an optional plugin only when its global is present.
@@ -219,6 +220,38 @@ function initTreeviewA11y() {
 }
 
 function initFinanceForms() {
+  document.querySelectorAll('[data-auto-submit]').forEach((input) => {
+    input.addEventListener('change', () => input.form?.requestSubmit())
+  })
+
+  const copyModalElement = document.querySelector('#copyBudgetModal')
+  if (copyModalElement && window.bootstrap) {
+    const modal = window.bootstrap.Modal.getOrCreateInstance(copyModalElement)
+    const form = copyModalElement.querySelector('[data-budget-copy-form]')
+    const name = copyModalElement.querySelector('[data-budget-copy-name]')
+    const month = copyModalElement.querySelector('[name="destination_month"]')
+    const source = copyModalElement.querySelector('[name="source_budget_id"]')
+    const configureCopy = (button, preserveMonth = false) => {
+      form.action = button.dataset.budgetCopyUrl
+      name.textContent = button.dataset.budgetName
+      source.value = button.dataset.budgetId
+      if (!preserveMonth) month.value = button.dataset.nextMonth
+    }
+    document.querySelectorAll('[data-budget-copy]').forEach((button) => {
+      button.addEventListener('click', () => {
+        configureCopy(button)
+        modal.show()
+      })
+    })
+    if (copyModalElement.dataset.openOnLoad !== undefined) {
+      const failedButton = document.querySelector(`[data-budget-copy][data-budget-id="${source.value}"]`)
+      if (failedButton) {
+        configureCopy(failedButton, true)
+        modal.show()
+      }
+    }
+  }
+
   document.querySelectorAll('[data-recurrence-toggle]').forEach((toggle) => {
     const fields = toggle.closest('form')?.querySelector('[data-recurrence-fields]')
     if (!fields) return
@@ -234,8 +267,35 @@ function initFinanceForms() {
 
   document.querySelectorAll('form[data-confirm]').forEach((form) => {
     form.addEventListener('submit', (event) => {
-      if (!window.confirm(form.dataset.confirm)) event.preventDefault()
+      const deletingFutureOccurrences = form.querySelector('[name="recurrence_scope"]')?.value === 'future'
+      const message = deletingFutureOccurrences && form.dataset.confirmFuture
+        ? form.dataset.confirmFuture
+        : form.dataset.confirm
+      if (!window.confirm(message)) event.preventDefault()
     })
+  })
+
+  document.querySelectorAll('form[data-filter-required]').forEach((form) => {
+    const criteria = [...form.querySelectorAll('[data-filter-criterion]')]
+    const submit = form.querySelector('[data-filter-submit]')
+    const feedback = form.querySelector('[data-filter-feedback]')
+    if (!submit) return
+
+    const hasCriteria = () => criteria.some((field) => {
+      if (field instanceof HTMLSelectElement && field.multiple) {
+        return [...field.selectedOptions].some((option) => option.value !== '')
+      }
+      return field.value.trim() !== ''
+    })
+    const syncFilterState = () => {
+      const enabled = hasCriteria()
+      submit.disabled = !enabled
+      feedback?.classList.toggle('d-none', enabled)
+    }
+
+    form.addEventListener('input', syncFilterState)
+    form.addEventListener('change', syncFilterState)
+    syncFilterState()
   })
 
   const type = document.querySelector('#type')

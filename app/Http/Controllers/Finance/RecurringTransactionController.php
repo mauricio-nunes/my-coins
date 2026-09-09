@@ -18,7 +18,7 @@ class RecurringTransactionController extends Controller
             'rule' => $rule,
             'next' => $recurrences->nextOccurrence($rule),
         ]);
-        $accounts = collect($store->all('accounts'))->where('archived', false)->values();
+        $accounts = collect($store->all('accounts'))->where('archived', false)->where('type', '!=', 'credit_card')->values();
 
         return view('recurrences.index', compact('items', 'accounts'));
     }

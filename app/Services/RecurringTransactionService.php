@@ -229,7 +229,8 @@ class RecurringTransactionService
     {
         return DB::transaction(function () use ($userId, $ruleId, $accountId): ?RecurringTransaction {
             $oldRule = RecurringTransaction::query()->where('user_id', $userId)->lockForUpdate()->find($ruleId);
-            $account = Account::query()->where('user_id', $userId)->where('archived', false)->find($accountId);
+            $account = Account::query()->where('user_id', $userId)->where('archived', false)
+                ->where('type', '!=', 'credit_card')->find($accountId);
             if (! $oldRule || $oldRule->status !== 'paused' || ! $account) {
                 return null;
             }

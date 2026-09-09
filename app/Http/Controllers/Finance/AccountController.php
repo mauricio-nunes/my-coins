@@ -15,7 +15,8 @@ class AccountController extends Controller
 {
     public function index(FinanceStore $store): View
     {
-        $accounts = collect($store->all('accounts'))->map(fn (array $account): array => $account + ['balance' => $store->balance($account['id'])]);
+        $accounts = collect($store->all('accounts'))->where('type', '!=', 'credit_card')
+            ->map(fn (array $account): array => $account + ['balance' => $store->balance($account['id'])]);
 
         return view('accounts.index', compact('accounts'));
     }
@@ -35,12 +36,13 @@ class AccountController extends Controller
     public function show(int $account, FinanceStore $store): View
     {
         $item = $store->find('accounts', $account) ?? abort(404);
+        abort_if($item['type'] === 'credit_card', 404);
         $transactions = $store->transactions(['account_id' => $account])->take(10);
 
         return view('accounts.show', [
             'account' => $item + ['balance' => $store->balance($account)],
             'transactions' => $transactions,
-            'accounts' => collect($store->all('accounts'))->keyBy('id'),
+            'accounts' => collect($store->all('accounts'))->where('type', '!=', 'credit_card')->keyBy('id'),
             'categories' => collect($store->all('categories'))->keyBy('id'),
             'hasTransactionsBeforeOpeningBalance' => $store->hasTransactionsBeforeOpeningBalance($account),
         ]);
@@ -48,12 +50,16 @@ class AccountController extends Controller
 
     public function edit(int $account, FinanceStore $store): View
     {
-        return view('accounts.form', ['account' => $store->find('accounts', $account) ?? abort(404)]);
+        $item = $store->find('accounts', $account) ?? abort(404);
+        abort_if($item['type'] === 'credit_card', 404);
+
+        return view('accounts.form', ['account' => $item]);
     }
 
     public function update(Request $request, int $account, FinanceStore $store): RedirectResponse
     {
-        abort_unless($store->find('accounts', $account), 404);
+        $item = $store->find('accounts', $account) ?? abort(404);
+        abort_if($item['type'] === 'credit_card', 404);
         $store->update('accounts', $account, $this->validated($request));
 
         return redirect()->route('accounts.show', $account)->with('success', 'Conta atualizada com sucesso.');
@@ -61,7 +67,8 @@ class AccountController extends Controller
 
     public function destroy(int $account, FinanceStore $store, RecurringTransactionService $recurrences): RedirectResponse
     {
-        abort_unless($store->find('accounts', $account), 404);
+        $item = $store->find('accounts', $account) ?? abort(404);
+        abort_if($item['type'] === 'credit_card', 404);
         $paused = DB::transaction(function () use ($store, $recurrences, $account): int {
             $store->update('accounts', $account, ['archived' => true]);
 
